@@ -126,10 +126,9 @@ extension MusicApp {
         chromeGutter = gutter
         let frame = NSRect(x:0,y:0,width:host.bounds.width,height:max(1,host.bounds.height-gutter))
         if surface.frame != frame { surface.frame = frame }
-        if chromeInset != inset {
-            chromeInset = inset
-            playerTop.constant = inset; queueTop?.constant = 16 + inset
-        }
+        chromeInset = inset
+        if playerTop.constant != inset { playerTop.constant = inset }
+        if queueTop?.constant != 16 + inset { queueTop?.constant = 16 + inset }
     }
     func positionChrome() {
         guard let host = mini?.contentView, surface != nil else { return }

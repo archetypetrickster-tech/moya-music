@@ -8,6 +8,14 @@ private final class SourceSwitchProbe: NSObject {
 
 extension MusicApp {
     func runSelfTest() {
+        mini.contentView?.layoutSubtreeIfNeeded()
+        precondition(playerTop.constant == chromeInset, "Startup header inset is stale")
+        let controls = controlsRow.convert(controlsRow.bounds, to:surface)
+        precondition(controls.minY >= surface.bounds.minY && controls.maxY <= surface.bounds.maxY, "Startup controls are clipped")
+        if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
+            savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-startup.png")
+        }
+        print("STARTUP_LAYOUT_OK: header inset and playback controls fit")
         web.loadHTMLString("""
         <html><body><section data-test-id="VIBE_PLAYERBAR">
         <button data-test-id="LIKE_BUTTON" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Like</button>

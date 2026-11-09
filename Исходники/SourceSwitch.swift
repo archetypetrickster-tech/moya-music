@@ -44,13 +44,15 @@ final class SourceSwitch: NSSegmentedControl {
     }
     private func updateHover(_ event: NSEvent) {
         let point = convert(event.locationInWindow,from:nil)
-        hoveredSegment = bounds.contains(point) ? (point.x < bounds.midX ? 0 : 1) : -1
-        hoverTarget = hoveredSegment >= 0 ? 1 : 0
+        if bounds.contains(point) {
+            hoveredSegment = point.x < bounds.midX ? 0 : 1
+            hoverTarget = 1
+        } else { hoverTarget = 0 }
         animate()
     }
     override func mouseMoved(with event: NSEvent) { updateHover(event) }
     override func mouseEntered(with event: NSEvent) { updateHover(event) }
-    override func mouseExited(with event: NSEvent) { hoveredSegment = -1; hoverTarget = 0; animate() }
+    override func mouseExited(with event: NSEvent) { hoverTarget = 0; animate() }
     override func mouseDown(with event: NSEvent) {
         super.mouseDown(with: event)
         showSelection(selectedSegment)
@@ -79,18 +81,14 @@ final class SourceSwitch: NSSegmentedControl {
         ticker = timer; RunLoop.main.add(timer,forMode:.common)
     }
     override func draw(_ dirtyRect: NSRect) {
-        let capsule = NSBezierPath(roundedRect:bounds,xRadius:bounds.height/2,yRadius:bounds.height/2)
-        NSColor.white.withAlphaComponent(0.055).setFill(); capsule.fill()
+        let capsule = NSBezierPath(roundedRect:bounds,xRadius:11,yRadius:11)
+        NSColor.white.withAlphaComponent(0.045).setFill(); capsule.fill()
         let inner = bounds.insetBy(dx:2,dy:2), width = inner.width/2
-        if hoveredSegment >= 0 {
-            NSColor.white.withAlphaComponent(hover*0.045).setFill()
-            NSBezierPath(roundedRect:NSRect(x:inner.minX+CGFloat(hoveredSegment)*width,y:inner.minY,width:width,height:inner.height),xRadius:inner.height/2,yRadius:inner.height/2).fill()
-        }
-        NSColor.white.withAlphaComponent(0.105).setFill()
-        NSBezierPath(roundedRect:NSRect(x:inner.minX+thumb*width,y:inner.minY,width:width,height:inner.height),xRadius:inner.height/2,yRadius:inner.height/2).fill()
+        NSColor.white.withAlphaComponent(0.10).setFill()
+        NSBezierPath(roundedRect:NSRect(x:inner.minX+thumb*width,y:inner.minY,width:width,height:inner.height),xRadius:9,yRadius:9).fill()
         for index in 0...1 {
             let active = 1 - min(1,abs(thumb-CGFloat(index)))
-            let normal = NSColor.white.withAlphaComponent(hoveredSegment == index ? 0.85 : 0.65)
+            let normal = NSColor.white.withAlphaComponent(0.62 + (hoveredSegment == index ? hover * 0.24 : 0))
             let color = normal.blended(withFraction:active,of:.yellow) ?? normal
             let text = (index == 0 ? "Волна" : "Моё") as NSString
             let attributes: [NSAttributedString.Key:Any] = [.font:font ?? NSFont.systemFont(ofSize:11,weight:.medium),.foregroundColor:color]

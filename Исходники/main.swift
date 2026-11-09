@@ -502,7 +502,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         fullPlayerHeight = playerContainer.heightAnchor.constraint(equalTo: playerContainer.widthAnchor, constant: 228)
         compactPlayerHeight = playerContainer.heightAnchor.constraint(equalToConstant: 222)
         playerWidth = playerContainer.widthAnchor.constraint(equalToConstant: 340)
-        playerTop = playerContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: 30)
+        playerTop = playerContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: 0)
         NSLayoutConstraint.activate([
             playerContainer.centerXAnchor.constraint(equalTo: root.centerXAnchor), playerWidth!,
             playerTop!, fullPlayerHeight
