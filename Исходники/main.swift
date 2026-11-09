@@ -279,21 +279,6 @@ final class IconButton: HoverButton {
     }
 }
 
-final class PillButton: HoverButton {
-    var iconName = "repeat"
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.white.withAlphaComponent(0.055 + hoverAmount * 0.065 + pressAmount * 0.045).setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: pressAmount, dy: pressAmount), xRadius: bounds.height / 2, yRadius: bounds.height / 2).fill()
-        let attributes: [NSAttributedString.Key:Any] = [.font: font ?? NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: foreground]
-        let text = title as NSString
-        let textSize = text.size(withAttributes: attributes)
-        let iconSize: CGFloat = 16, gap: CGFloat = 7
-        let x = (bounds.width - iconSize - gap - textSize.width) / 2
-        IconLibrary.draw(IconLibrary.image(iconName, size: iconSize), in: NSRect(x: x, y: bounds.midY - iconSize / 2, width: iconSize, height: iconSize), color: foreground)
-        text.draw(at: NSPoint(x: x + iconSize + gap, y: bounds.midY - textSize.height / 2), withAttributes: attributes)
-    }
-}
-
 final class RoundPlayButton: HoverButton {
     var playing = false { didSet { if playing != oldValue { needsDisplay = true } } }
     override func draw(_ dirtyRect: NSRect) {
@@ -337,8 +322,10 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     var likeButton: IconButton!
     var dislikeButton: IconButton!
     var repeatButton: IconButton!
-    var waveButton: PillButton!
-    var likesButton: PillButton!
+    var sourceSwitch: SourceSwitch!
+    var pendingSource: String?
+    var pendingSourceAt = Date.distantPast
+    var confirmedSource = "wave"
     let ambientView = NSView()
     let ambientSpin = CALayer()
     var surface: PlayerSurface!
@@ -520,15 +507,18 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             playerContainer.centerXAnchor.constraint(equalTo: root.centerXAnchor), playerWidth!,
             playerTop!, fullPlayerHeight
         ])
-        waveButton = sourceButton("Волна", "audio-waveform", #selector(startWave))
-        likesButton = sourceButton("Моё", "heart", #selector(startLikes))
+        sourceSwitch = SourceSwitch(frame:.zero)
+        sourceSwitch.target = self; sourceSwitch.action = #selector(sourceSwitchChanged(_:))
+        sourceSwitch.translatesAutoresizingMaskIntoConstraints = false
+        sourceSwitch.widthAnchor.constraint(equalToConstant:164).isActive = true
+        sourceSwitch.heightAnchor.constraint(equalToConstant:32).isActive = true
         shuffleButton = iconButton("shuffle", "Случайный порядок", #selector(toggleShuffle), 16)
         shuffleButton.isEnabled = false
         compactButton = iconButton("minimize-in", "Компактный вид", #selector(toggleCompact), 16)
         let libraryButton = iconButton("square.grid.2x2", "Открыть библиотеку", #selector(showLibrary), 16)
         repeatButton = iconButton("repeat", "Повтор выключен", #selector(toggleRepeat), 16)
         repeatButton.isEnabled = false
-        let top = NSStackView(views: [shuffleButton!, repeatButton!, waveButton!, likesButton!, libraryButton, compactButton])
+        let top = NSStackView(views: [shuffleButton!, repeatButton!, sourceSwitch!, libraryButton, compactButton])
         top.orientation = .horizontal; top.spacing = 6; top.distribution = .equalSpacing; top.alignment = .centerY
         cover.image = nil
         cover.contentTintColor = accent; cover.imageScaling = .scaleProportionallyUpOrDown
@@ -626,16 +616,6 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         UserDefaults.standard.removeObject(forKey: "pinned")
     }
 
-    func sourceButton(_ title: String, _ icon: String, _ action: Selector) -> PillButton {
-        let button = PillButton(title: title, target: self, action: action)
-        button.iconName = icon; button.font = .systemFont(ofSize: 11, weight: .medium)
-        button.isBordered = false; button.translatesAutoresizingMaskIntoConstraints = false
-        button.widthAnchor.constraint(equalToConstant: title == "Волна" ? 80 : 72).isActive = true
-        button.heightAnchor.constraint(equalToConstant: 32).isActive = true
-        button.setAccessibilityLabel(title)
-        return button
-    }
-
     func iconButton(_ symbol: String, _ help: String, _ action: Selector, _ size: CGFloat) -> IconButton {
         let image = IconLibrary.image(symbol, size: size)
         let button = IconButton(image: image, target: self, action: action)
@@ -664,8 +644,12 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     @objc func showLibrary() { library.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
     @objc func showMini() { mini.makeKeyAndOrderFront(nil); layoutQueueRegion(); NSApp.activate(ignoringOtherApps: true) }
     @objc func reload() { web.reload() }
-    @objc func startWave() { command("wave") }
-    @objc func startLikes() { command("likes") }
+    @objc func sourceSwitchChanged(_ sender: SourceSwitch) {
+        let source = sender.selectedSegment == 0 ? "wave" : "likes"
+        sender.showSelection(sender.selectedSegment)
+        pendingSource = source; pendingSourceAt = Date()
+        command(source)
+    }
     @objc func togglePlay() { command("toggle") }
     @objc func next() { command("nexttrack") }
     @objc func previous() { command("previoustrack") }
@@ -876,6 +860,8 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             return
         }
         if data["sourceFailed"] as? Bool == true {
+            pendingSource = nil
+            sourceSwitch.showSelection(confirmedSource == "wave" ? 0 : 1)
             artistLabel.stringValue = "Открой библиотеку и нажми «Слушать»"
             showLibrary(); return
         }
@@ -893,8 +879,11 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             artistLabel.stringValue = data["artist"] as? String ?? ""
             if !selfTest && !UserDefaults.standard.bool(forKey: "hasPlayed") { UserDefaults.standard.set(true, forKey: "hasPlayed") }
         }
-        waveButton.selected = data["source"] as? String == "wave"
-        likesButton.selected = data["source"] as? String == "likes"
+        if let source = data["source"] as? String, ["wave","likes"].contains(source) {
+            confirmedSource = source
+            if pendingSource == source || Date().timeIntervalSince(pendingSourceAt) > 20 { pendingSource = nil }
+            if pendingSource == nil { sourceSwitch.showSelection(source == "wave" ? 0 : 1, animated:!selfTest) }
+        }
         playing = data["playing"] as? Bool ?? false
         playButton.playing = playing
         overlayQueue.updatePlayback(title: titleLabel.stringValue, artist: artistLabel.stringValue, playing: playing)

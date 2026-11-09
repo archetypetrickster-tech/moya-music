@@ -1,6 +1,11 @@
 import AppKit
 import WebKit
 
+private final class SourceSwitchProbe: NSObject {
+    var selections: [Int] = []
+    @objc func changed(_ sender: SourceSwitch) { selections.append(sender.selectedSegment) }
+}
+
 extension MusicApp {
     func runSelfTest() {
         web.loadHTMLString("""
@@ -38,6 +43,7 @@ extension MusicApp {
                 print("SELF_TEST_FAILED: \(result)"); exit(1)
             }
             self.update(state)
+            self.checkSourceSwitch()
             let original = self.compact
             if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_ARTWORK"], let data = try? Data(contentsOf: URL(fileURLWithPath: path)), let image = NSImage(data: data) {
                 self.cover.image = image; self.setAmbient(self.makeAmbient(data))
@@ -65,6 +71,30 @@ extension MusicApp {
             print("SELF_TEST_OK: elapsed time, detached audio, seek state, like/dislike/repeat, compact layout and large artwork")
             NSApp.terminate(nil)
         }
+    }
+    func checkSourceSwitch() {
+        let probe = SourceSwitchProbe()
+        let oldTarget = sourceSwitch.target, oldAction = sourceSwitch.action
+        sourceSwitch.target = probe; sourceSwitch.action = #selector(SourceSwitchProbe.changed(_:))
+        defer {
+            sourceSwitch.target = oldTarget; sourceSwitch.action = oldAction
+            sourceSwitch.showSelection(0, animated:false)
+        }
+        for code: UInt16 in [124,123] {
+            guard let event = NSEvent.keyEvent(with:.keyDown, location:.zero, modifierFlags:[], timestamp:0,
+                windowNumber:mini.windowNumber, context:nil, characters:"", charactersIgnoringModifiers:"", isARepeat:false, keyCode:code) else { fatalError("No key event") }
+            sourceSwitch.keyDown(with:event)
+        }
+        precondition(probe.selections == [1,0])
+        sourceSwitch.showSelection(1, animated:false)
+        precondition(sourceSwitch.selectedSegment == 1 && probe.selections == [1,0])
+        if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
+            mini.contentView?.layoutSubtreeIfNeeded()
+            savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-mine.png")
+        }
+        let bounds = sourceSwitch.bounds
+        precondition(bounds.width >= 164 && bounds.height >= 32)
+        print("SOURCE_SWITCH_OK: arrows select both sources; state updates send no playback command")
     }
     func checkQueuePresentation() {
         let sample: [String:Any] = ["source":"wave", "playing":true, "ready":true,
