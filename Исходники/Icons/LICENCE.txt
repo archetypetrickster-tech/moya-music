@@ -1,0 +1,4 @@
+Original Yandex Music UI assets.
+Source: https://music.yandex.ru/icons/sprite.svg
+Original symbol identifiers are recorded in YANDEX-SOURCE.json.
+Extracted for this local player; these assets are not part of the IconMCP MIT icon set.

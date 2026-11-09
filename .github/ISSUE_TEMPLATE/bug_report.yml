@@ -1,0 +1,25 @@
+name: Ошибка в плеере
+description: Расскажите, что не работает и как это повторить.
+title: "[Ошибка] "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Версия плеера
+      placeholder: Например, 0.7.6
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: Версия macOS и процессор
+      placeholder: Например, macOS 27.3, Apple Silicon
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Что происходит?
+      description: Какие действия приводят к ошибке и что вы ожидали увидеть? Можно добавить скриншот без личных данных.
+    validations:
+      required: true

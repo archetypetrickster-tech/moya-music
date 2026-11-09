@@ -1,0 +1,22 @@
+{
+  "source": "https://music.yandex.ru/icons/sprite.svg",
+  "icons": {
+    "play": "play",
+    "pause": "pause",
+    "skip-forward": "next_xs",
+    "skip-back": "previous_xs",
+    "heart": "like_xs",
+    "heart-filled": "liked_xs",
+    "unlike": "dislike_xs",
+    "unlike-filled": "disliked_xs",
+    "repeat": "repeat_xs",
+    "repeat-one": "repeat_one_xs",
+    "audio-waveform": "navigationMyVibe_xs",
+    "grid": "navigationCollection_xs",
+    "pushpin": "pin_xs",
+    "pushpin-filled": "pin_filled_xs",
+    "minimize": "fullscreen_xs",
+    "playlist": "playQueue_xs",
+    "shuffle": "shuffle_xs"
+  }
+}

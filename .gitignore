@@ -1,0 +1,12 @@
+.DS_Store
+*.app/
+*.zip
+*.dmg
+*.pkg
+*.log
+*.pyc
+__pycache__/
+.env
+.env.*
+work/
+outputs/
