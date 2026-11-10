@@ -35,17 +35,32 @@ extension MusicApp {
         const clock = window.__moyaMusic.state();
         const audio = new Audio(); audio.play().catch(()=>{}); audio.currentTime = 31;
         await window.__moyaMusic.command('nexttrack');
+        const seekRequests = [];
+        // Reproduce the site's handler: exact zero is ignored, positive times work.
+        navigator.mediaSession.setActionHandler('seekto', ({seekTime}) => {
+            seekRequests.push(seekTime);
+            if (seekTime) audio.currentTime = seekTime;
+        });
+        await window.__moyaMusic.command('seekto', 0);
+        const handlerZero = audio.currentTime;
+        await window.__moyaMusic.command('seekto', 59);
+        const handlerMiddle = audio.currentTime;
+        navigator.mediaSession.setActionHandler('seekto', null);
+        await window.__moyaMusic.command('seekto', 0);
+        const mediaZero = audio.currentTime;
         await window.__moyaMusic.command('seekto', 41);
         await window.__moyaMusic.command('like');
         await window.__moyaMusic.command('dislike');
         await window.__moyaMusic.command('repeat');
-        return {state:window.__moyaMusic.state(),clock,next:document.body.dataset.next};
+        return {state:window.__moyaMusic.state(),clock,next:document.body.dataset.next,handlerZero,handlerMiddle,mediaZero,seekRequests};
         """
         web.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
             guard case .success(let value) = result, let dict = value as? [String: Any], dict["next"] as? String == "ok",
                   let clock = dict["clock"] as? [String: Any], (clock["position"] as? Double ?? 0) > 23,
                   let state = dict["state"] as? [String: Any], state["title"] as? String == "Проверка",
                   state["position"] as? Double == 41, state["duration"] as? Double == 147,
+                  dict["handlerZero"] as? Double == 0.001, dict["handlerMiddle"] as? Double == 59,
+                  dict["mediaZero"] as? Double == 0, dict["seekRequests"] as? [Double] == [0.001,59],
                   state["liked"] as? Bool == true, state["disliked"] as? Bool == true,
                   state["repeat"] as? String == "one" else {
                 print("SELF_TEST_FAILED: \(result)"); exit(1)
@@ -76,7 +91,7 @@ extension MusicApp {
             self.checkQueuePresentation()
             self.setCompact(original)
             if ProcessInfo.processInfo.arguments.contains("--window-test") { self.runNativeWindowTest(); return }
-            print("SELF_TEST_OK: elapsed time, detached audio, seek state, like/dislike/repeat, compact layout and large artwork")
+            print("SELF_TEST_OK: elapsed time, detached audio, zero/middle seeks through handler and media, like/dislike/repeat, compact layout and large artwork")
             NSApp.terminate(nil)
         }
     }

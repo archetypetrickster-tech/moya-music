@@ -144,7 +144,10 @@
     }
     if (action === 'toggle') action = state().playing ? 'pause' : 'play';
     if (handlers.has(action)) {
-      handlers.get(action)({action, ...(action === 'seekto' ? {seekTime: value, fastSeek: false} : {})});
+      // Yandex ignores an exact zero in its MediaSession seek handler. One millisecond
+      // selects the beginning without skipping an audible part of the track.
+      const seekTime = action === 'seekto' && value === 0 ? 0.001 : value;
+      handlers.get(action)({action, ...(action === 'seekto' ? {seekTime, fastSeek: false} : {})});
       return 'handler';
     }
     if (a && action === 'play') { await a.play(); return 'media'; }
