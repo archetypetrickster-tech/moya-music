@@ -221,7 +221,7 @@ extension MusicApp {
             NSRect(x: area.midX, y: area.minY, width: area.width/2, height: area.height),
             area
         ]
-        if area.height/2 >= 674 {
+        if area.height/2 >= 598 {
             frames += [NSRect(x: area.minX, y: area.midY, width: area.width/2, height: area.height/2),
                        NSRect(x: area.midX, y: area.minY, width: area.width/2, height: area.height/2)]
         }
@@ -237,7 +237,7 @@ extension MusicApp {
             precondition(chromeGutter == 0 && chromeInset >= 30)
             precondition(playerContainer.frame.width <= 660 && playerContainer.frame.width <= mini.contentView!.bounds.width)
         }
-        let baseline = NSRect(x: area.midX - 208, y: area.midY - 337, width: 416, height: 674)
+        let baseline = NSRect(x: area.midX - 170, y: area.midY - 299, width: 340, height: 598)
         mini.setFrame(baseline, display: true)
         positionChrome()
         precondition(chromeGutter == 30 && chromeInset == 0)
