@@ -1,7 +1,45 @@
 import AppKit
 
 // A transparent part of the main window hosts the floating controls. No extra window or Space is created.
+private final class CardShadowView: NSView {
+    var cardFrame = NSRect.zero
+    var radius: CGFloat = 14
+    override var isOpaque: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        guard cardFrame.width > 0 else { return }
+        let card = NSBezierPath(roundedRect:cardFrame,xRadius:radius,yRadius:radius)
+        NSGraphicsContext.saveGraphicsState()
+        // Paint only outside the card, so its translucent glass keeps its own color.
+        let outside = NSBezierPath(rect:bounds)
+        outside.append(card); outside.windingRule = .evenOdd; outside.addClip()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.24)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = NSSize(width:0,height:-4)
+        shadow.set()
+        NSColor.black.setFill(); card.fill()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+}
+
 final class ChromeHostView: NSView {
+    static let shadowMargin: CGFloat = 24
+    private let cardShadow = CardShadowView()
+    override init(frame frameRect: NSRect) {
+        super.init(frame:frameRect)
+        addSubview(cardShadow)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:)") }
+    // The shadow has a fixed card silhouette; fading traffic lights never enter its path.
+    func updateCardShadow(frame: NSRect, radius: CGFloat, visible: Bool) {
+        cardShadow.isHidden = !visible
+        if cardShadow.frame != bounds { cardShadow.frame = bounds }
+        if cardShadow.cardFrame != frame || cardShadow.radius != radius {
+            cardShadow.cardFrame = frame; cardShadow.radius = radius
+            cardShadow.needsDisplay = true
+        }
+    }
     var onTopHover: ((Bool) -> Void)?
     var onLayout: (() -> Void)?
     private var tracking: NSTrackingArea?
@@ -60,17 +98,22 @@ extension MusicApp {
     var usesNativeWindowControls: Bool {
         fullScreenPhase != .windowed || mini.styleMask.contains(.fullScreen)
     }
-    var preservesSystemFrame: Bool {
-        if usesNativeWindowControls || mini.isZoomed || mini.frame.width > 660 { return true }
+    var usesSystemPlacementFrame: Bool {
+        if usesNativeWindowControls || mini.isZoomed { return true }
         guard let bounds = mini.screen?.visibleFrame else { return false }
         let frame = mini.frame
         let gridWidth = [1.0, 0.5, 1.0/3.0, 2.0/3.0].contains { abs(frame.width - bounds.width * $0) <= 24 }
         let gridHeight = [1.0, 0.5].contains { abs(frame.height - bounds.height * $0) <= 32 }
         return gridWidth && gridHeight
     }
-    var windowTopReserve: CGFloat { chromeGutter + chromeInset }
+    var preservesSystemFrame: Bool {
+        usesSystemPlacementFrame || mini.frame.width > 660 + 2 * ChromeHostView.shadowMargin
+    }
+    var cardShadowMargin: CGFloat { usesSystemPlacementFrame ? 0 : ChromeHostView.shadowMargin }
+    var windowCardWidth: CGFloat { max(340, mini.frame.width - 2 * cardShadowMargin) }
+    var windowTopReserve: CGFloat { chromeGutter + chromeInset + cardShadowMargin }
     var floatsChromeAboveCard: Bool {
-        guard !preservesSystemFrame, let area = mini.screen?.visibleFrame else { return false }
+        guard !usesSystemPlacementFrame, let area = mini.screen?.visibleFrame else { return false }
         let frame = mini.frame
         return frame.minX > area.minX + 12 && frame.maxX < area.maxX - 12 && frame.minY > area.minY + 12 && frame.maxY < area.maxY - 12
     }
@@ -118,23 +161,31 @@ extension MusicApp {
         if native { chromeHide?.cancel(); chromeView?.alphaValue = 0; chromeVisible = false }
         mini.isMovableByWindowBackground = !native
         surface?.layer?.cornerRadius = native ? 0 : 14
+        updateCardShadow()
     }
     func updateChromeInset() {
         guard let host = mini?.contentView, let surface, playerTop != nil else { return }
         let gutter: CGFloat = floatsChromeAboveCard ? 30 : 0
         let inset: CGFloat = gutter > 0 ? 0 : (usesNativeWindowControls ? max(30, host.safeAreaInsets.top) : 30)
         chromeGutter = gutter
-        let frame = NSRect(x:0,y:0,width:host.bounds.width,height:max(1,host.bounds.height-gutter))
+        let margin = cardShadowMargin
+        let frame = NSRect(x:margin,y:margin,width:max(1,host.bounds.width-2*margin),height:max(1,host.bounds.height-gutter-margin))
         if surface.frame != frame { surface.frame = frame }
         chromeInset = inset
         if playerTop.constant != inset { playerTop.constant = inset }
         if queueTop?.constant != 16 + inset { queueTop?.constant = 16 + inset }
+        updateCardShadow()
+    }
+    func updateCardShadow() {
+        guard let host = mini?.contentView as? ChromeHostView, let surface else { return }
+        let radius = surface.layer?.cornerRadius ?? 14
+        host.updateCardShadow(frame:surface.frame, radius:radius, visible:cardShadowMargin > 0 && !usesNativeWindowControls)
     }
     func positionChrome() {
         guard let host = mini?.contentView, surface != nil else { return }
         updateChromeInset()
         let y = chromeGutter > 0 ? surface.frame.maxY + 2 : host.bounds.maxY - 35
-        let frame = NSRect(x:12,y:y,width:76,height:24)
+        let frame = NSRect(x:surface.frame.minX+12,y:y,width:76,height:24)
         if let chromeView, chromeView.frame != frame { chromeView.frame = frame }
     }
     func revealChrome(_ visible: Bool) {

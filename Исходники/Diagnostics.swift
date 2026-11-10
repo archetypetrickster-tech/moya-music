@@ -122,7 +122,7 @@ extension MusicApp {
         let before = mini.frame
         toggleQueue(); applyQueue(sample)
         mini.contentView?.layoutSubtreeIfNeeded()
-        precondition(queueOverlay && mini.frame.height >= min(mini.frame.width, 660) + 228 + windowTopReserve)
+        precondition(queueOverlay && mini.frame.height >= min(windowCardWidth, 660) + 228 + windowTopReserve)
         if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-queue.png") }
         closeQueueOverlay()
         precondition(compact && abs(mini.frame.height - before.height) < 1)
@@ -197,7 +197,7 @@ extension MusicApp {
             precondition(chromeGutter == 0 && chromeInset >= 30)
             precondition(playerContainer.frame.width <= 660 && playerContainer.frame.width <= mini.contentView!.bounds.width)
         }
-        let baseline = NSRect(x: area.midX - 170, y: area.midY - 299, width: 340, height: 598)
+        let baseline = NSRect(x: area.midX - 194, y: area.midY - 311, width: 388, height: 622)
         mini.setFrame(baseline, display: true)
         positionChrome()
         precondition(chromeGutter == 30 && chromeInset == 0)
