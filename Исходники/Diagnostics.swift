@@ -69,7 +69,7 @@ extension MusicApp {
             self.checkSourceSwitch()
             let original = self.compact
             if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_ARTWORK"], let data = try? Data(contentsOf: URL(fileURLWithPath: path)), let image = NSImage(data: data) {
-                self.cover.image = image; self.setAmbient(self.makeAmbient(data))
+                self.setArtworkImage(image,animated:false); self.setAmbient(self.makeAmbient(data))
             }
             self.setCompact(true)
             self.mini.contentView?.layoutSubtreeIfNeeded()
@@ -80,7 +80,7 @@ extension MusicApp {
             self.mini.contentView?.layoutSubtreeIfNeeded()
             if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { self.savePreview(path) }
             let beforeArtwork = self.mini.frame.size
-            self.cover.image = NSImage(size: NSSize(width: 3000, height: 3000))
+            self.setArtworkImage(NSImage(size:NSSize(width:3000,height:3000)),animated:false)
             self.titleLabel.stringValue = String(repeating: "Очень длинное название трека ", count: 12)
             self.mini.contentView?.layoutSubtreeIfNeeded()
             guard self.mini.frame.size == beforeArtwork,

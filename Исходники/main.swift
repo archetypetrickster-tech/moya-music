@@ -312,6 +312,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     var popupWindows: [NSWindow] = []
     var statusItem: NSStatusItem!
     let cover = ArtworkView()
+    let compactArtwork = ArtworkView()
     let titleLabel = TrackTitle(labelWithString: "Твоя музыка. Рядом.")
     let artistLabel = NSTextField(labelWithString: "Открой библиотеку и выбери трек")
     let progress = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
@@ -523,10 +524,17 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         repeatButton.isEnabled = false
         let top = NSStackView(views: [shuffleButton!, repeatButton!, sourceSwitch!, libraryButton, compactButton])
         top.orientation = .horizontal; top.spacing = 4; top.distribution = .equalSpacing; top.alignment = .centerY
-        cover.image = nil
-        cover.contentTintColor = accent; cover.imageScaling = .scaleProportionallyUpOrDown
-        cover.wantsLayer = true; cover.layer?.cornerRadius = 6; cover.layer?.cornerCurve = .continuous; cover.layer?.masksToBounds = true
-        cover.layer?.backgroundColor = NSColor(calibratedWhite: 0.13, alpha: 1).cgColor
+        for artwork in [cover,compactArtwork] {
+            artwork.image = nil
+            artwork.contentTintColor = accent; artwork.imageScaling = .scaleProportionallyUpOrDown
+            artwork.wantsLayer = true; artwork.layer?.cornerRadius = 6
+            artwork.layer?.cornerCurve = .continuous; artwork.layer?.masksToBounds = true
+            artwork.layer?.backgroundColor = NSColor(calibratedWhite:0.13,alpha:1).cgColor
+        }
+        compactArtwork.isHidden = true
+        compactArtwork.translatesAutoresizingMaskIntoConstraints = false
+        compactArtwork.widthAnchor.constraint(equalToConstant:64).isActive = true
+        compactArtwork.heightAnchor.constraint(equalToConstant:64).isActive = true
         artworkContainer = NSView()
         cover.translatesAutoresizingMaskIntoConstraints = false
         artworkContainer.addSubview(cover)
@@ -551,6 +559,15 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         queueButton.heightAnchor.constraint(equalToConstant: 32).isActive = true
         let artistRow = NSStackView(views: [artistLabel, NSView(), queueButton!])
         artistRow.orientation = .horizontal; artistRow.alignment = .centerY; artistRow.spacing = 8
+        let metadataLabels = NSStackView(views:[titleLabel,artistRow])
+        metadataLabels.orientation = .vertical; metadataLabels.alignment = .leading; metadataLabels.spacing = 0
+        for view in [titleLabel,artistRow] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            view.widthAnchor.constraint(equalTo:metadataLabels.widthAnchor).isActive = true
+        }
+        let metadataRow = NSStackView(views:[compactArtwork,metadataLabels])
+        metadataRow.orientation = .horizontal; metadataRow.alignment = .centerY; metadataRow.spacing = 12
+        metadataRow.detachesHiddenViews = true
         progress.cell = PlayerSliderCell()
         progress.minValue = 0; progress.maxValue = 1; progress.doubleValue = 0
         progress.target = self; progress.action = #selector(seek); progress.isContinuous = false
@@ -579,16 +596,15 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         let controls = NSStackView(views: [dislikeButton, previousButton, playButton, nextButton, likeButton])
         controls.orientation = .horizontal; controls.distribution = .equalSpacing; controls.alignment = .centerY
         controlsRow = controls
-        let stack = NSStackView(views: [top, artworkContainer, titleLabel, artistRow, progress, timeRow, controls])
+        let stack = NSStackView(views: [top, artworkContainer, metadataRow, progress, timeRow, controls])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 0; stack.translatesAutoresizingMaskIntoConstraints = false
         stack.setCustomSpacing(14, after: top)
         stack.setCustomSpacing(14, after: artworkContainer)
-        stack.setCustomSpacing(0, after: titleLabel)
-        stack.setCustomSpacing(8, after: artistRow)
+        stack.setCustomSpacing(8, after: metadataRow)
         stack.setCustomSpacing(2, after: progress)
         stack.setCustomSpacing(10, after: timeRow)
         playerContainer.addSubview(stack)
-        for view in [top, artworkContainer!, titleLabel, artistRow, progress, timeRow!] {
+        for view in [top, artworkContainer!, metadataRow, progress, timeRow!] {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
@@ -671,7 +687,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         compact = enabled
         fullPlayerHeight.isActive = false; compactPlayerHeight.isActive = false
         artworkHeight.isActive = !enabled
-        artworkContainer.isHidden = enabled; timeRow.isHidden = enabled
+        artworkContainer.isHidden = enabled; compactArtwork.isHidden = !enabled; timeRow.isHidden = enabled
         if enabled { compactPlayerHeight.isActive = true } else { fullPlayerHeight.isActive = true }
         dockedQueue.isHidden = true; dockedQueueSuppressed = false
         mini.minSize = NSSize(width: 340, height: 252)
@@ -929,10 +945,19 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         let seconds = value.isFinite ? max(0, Int(value)) : 0
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
+    func setArtworkImage(_ image: NSImage?, animated: Bool) {
+        for artwork in [cover,compactArtwork] {
+            if animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                let fade = CATransition(); fade.type = .fade; fade.duration = 0.35
+                artwork.layer?.add(fade,forKey:"artworkFade")
+            }
+            artwork.image = image
+        }
+    }
     func loadArtwork(_ string: String) {
         artworkTask?.cancel(); artworkURL = string
         guard let url = URL(string: string), url.scheme == "https" else {
-            cover.image = nil
+            setArtworkImage(nil,animated:false)
             setAmbient(nil); return
         }
         artworkTask = URLSession.shared.dataTask(with: url) { data, _, _ in
@@ -940,9 +965,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             let ambient = self.makeAmbient(data)
             DispatchQueue.main.async {
                 if self.artworkURL == string {
-                    let fade = CATransition(); fade.type = .fade; fade.duration = 0.35
-                    if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { self.cover.layer?.add(fade, forKey: "artworkFade") }
-                    self.cover.image = image; self.setAmbient(ambient)
+                    self.setArtworkImage(image,animated:true); self.setAmbient(ambient)
                 }
             }
         }
