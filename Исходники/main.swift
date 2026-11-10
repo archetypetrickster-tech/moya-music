@@ -466,7 +466,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         mini.titlebarAppearsTransparent = true; mini.isMovableByWindowBackground = true
         mini.titlebarSeparatorStyle = .none
         mini.acceptsMouseMovedEvents = true
-        mini.isOpaque = false; mini.backgroundColor = .clear; mini.hasShadow = true
+        mini.isOpaque = false; mini.backgroundColor = .clear; mini.hasShadow = false
         mini.minSize = NSSize(width: 340, height: 598)
         mini.minFullScreenContentSize = NSSize(width: 340, height: 598)
         mini.collectionBehavior = [.fullScreenPrimary, .fullScreenAllowsTiling]

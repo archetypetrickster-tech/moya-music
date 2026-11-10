@@ -105,13 +105,19 @@ extension MusicApp {
         print("SOURCE_SWITCH_OK: arrows select both sources; state updates send no playback command")
     }
     func checkQueuePresentation() {
-        let sample: [String:Any] = ["source":"wave", "playing":true, "ready":true,
+        var sample: [String:Any] = ["source":"wave", "playing":true, "ready":true,
             "current":["title":"Сейчас играет", "artist":"Исполнитель"],
             "tracks":[
                 ["id":"old", "title":"Предыдущая песня", "artist":"Исполнитель", "duration":185.0,"index":0,"bucket":"history","current":false],
                 ["id":"now", "title":"Сейчас играет", "artist":"Исполнитель", "duration":210.0,"index":1,"bucket":"current","current":true],
                 ["id":"next", "title":"Следующая песня", "artist":"Другой исполнитель", "duration":245.0,"index":2,"bucket":"upcoming","current":false]
             ]]
+        // A three-digit count exercises the queue header at the minimum window width.
+        let history: [[String:Any]] = (0..<100).map { index in
+            ["id":"history-\(index)", "title":"Песня \(index+1)", "artist":"Исполнитель", "duration":185.0,
+             "index":index+3, "bucket":"history", "current":false]
+        }
+        sample["tracks"] = history + (sample["tracks"] as? [[String:Any]] ?? [])
         setCompact(true)
         let before = mini.frame
         toggleQueue(); applyQueue(sample)

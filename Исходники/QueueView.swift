@@ -151,9 +151,10 @@ final class QueuePanel: NSView, NSTableViewDataSource, NSTableViewDelegate {
     var onBack: (() -> Void)?
     var onSelect: ((QueueTrack) -> Void)?
     var onTogglePlayback: (() -> Void)?
-    private let heading = NSTextField(labelWithString: "Очередь")
+    private let heading = NSTextField(labelWithString: "Волна")
+    private let queueLabel = NSTextField(labelWithString: "Очередь")
     private let countLabel = NSTextField(labelWithString: "")
-    private let back = NSButton(title: "← Плеер", target: nil, action: nil)
+    private let back = NSButton(title: "Плеер", target: nil, action: nil)
     private let table = QueueTable()
     private let scroll = NSScrollView()
     private let status = NSTextField(wrappingLabelWithString: "Загружаю очередь…")
@@ -174,11 +175,33 @@ final class QueuePanel: NSView, NSTableViewDataSource, NSTableViewDelegate {
         translatesAutoresizingMaskIntoConstraints = false
         back.target = self; back.action = #selector(goBack); back.isBordered = false
         back.font = .systemFont(ofSize: 12, weight: .medium); back.contentTintColor = .secondaryLabelColor
-        heading.font = .systemFont(ofSize: 15, weight: .semibold)
-        countLabel.font = .systemFont(ofSize: 10); countLabel.textColor = NSColor.white.withAlphaComponent(0.4)
-        let header = NSStackView(views: [back, NSView(), heading, countLabel])
-        header.orientation = .horizontal; header.spacing = 8; header.alignment = .centerY
+        back.image = NSImage(systemSymbolName:"chevron.left", accessibilityDescription:nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:12, weight:.medium))
+        back.imagePosition = .imageLeading; back.imageHugsTitle = true; back.alignment = .left
+        back.focusRingType = .none; back.setAccessibilityLabel("Вернуться к плееру")
+        heading.font = .systemFont(ofSize:12, weight:.semibold)
+        queueLabel.font = .systemFont(ofSize:12, weight:.medium)
+        countLabel.font = .monospacedDigitSystemFont(ofSize:12, weight:.medium)
+        for field in [queueLabel, countLabel] { field.textColor = NSColor.white.withAlphaComponent(0.65) }
+        let header = NSView()
         header.translatesAutoresizingMaskIntoConstraints = false
+        for view in [back, heading, queueLabel, countLabel] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            header.addSubview(view)
+        }
+        NSLayoutConstraint.activate([
+            back.leadingAnchor.constraint(equalTo:header.leadingAnchor),
+            back.heightAnchor.constraint(equalToConstant:32),
+            back.centerYAnchor.constraint(equalTo:heading.centerYAnchor),
+            heading.centerXAnchor.constraint(equalTo:header.centerXAnchor),
+            heading.centerYAnchor.constraint(equalTo:header.centerYAnchor),
+            heading.leadingAnchor.constraint(greaterThanOrEqualTo:back.trailingAnchor, constant:8),
+            queueLabel.leadingAnchor.constraint(greaterThanOrEqualTo:heading.trailingAnchor, constant:8),
+            queueLabel.firstBaselineAnchor.constraint(equalTo:heading.firstBaselineAnchor),
+            countLabel.leadingAnchor.constraint(equalTo:queueLabel.trailingAnchor, constant:6),
+            countLabel.firstBaselineAnchor.constraint(equalTo:heading.firstBaselineAnchor),
+            countLabel.trailingAnchor.constraint(equalTo:header.trailingAnchor)
+        ])
         addSubview(header)
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("track"))
         column.resizingMask = .autoresizingMask
@@ -224,7 +247,7 @@ final class QueuePanel: NSView, NSTableViewDataSource, NSTableViewDelegate {
         scrollToBottom = scroll.bottomAnchor.constraint(equalTo: bottomAnchor)
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: topAnchor), header.leadingAnchor.constraint(equalTo: leadingAnchor),
-            header.trailingAnchor.constraint(equalTo: trailingAnchor), header.heightAnchor.constraint(equalToConstant: 30),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor), header.heightAnchor.constraint(equalToConstant: 32),
             scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor), scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollToFooter!,
@@ -252,7 +275,7 @@ final class QueuePanel: NSView, NSTableViewDataSource, NSTableViewDelegate {
         footerView.isHidden = docked
         scrollToFooter.isActive = !docked
         scrollToBottom.isActive = docked
-        back.title = docked ? "Скрыть" : "← Плеер"
+        back.title = "Плеер"
         back.toolTip = docked ? "Убрать список под плеером" : "Вернуться к плееру"
         scrolledToCurrent = false
     }
@@ -264,7 +287,7 @@ final class QueuePanel: NSView, NSTableViewDataSource, NSTableViewDelegate {
         let updatedPlaying = value["playing"] as? Bool ?? false
         let changed = updated != tracks || updatedSource != source || updatedPlaying != playing
         tracks = updated; source = updatedSource; playing = updatedPlaying
-        heading.stringValue = source == "wave" ? "Волна · очередь" : "Моё · очередь"
+        heading.stringValue = source == "wave" ? "Волна" : "Моё"
         countLabel.stringValue = tracks.isEmpty ? "" : String(tracks.count)
         rows.removeAll()
         if source == "wave" {
