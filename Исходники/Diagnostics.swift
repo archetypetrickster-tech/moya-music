@@ -32,8 +32,15 @@ extension MusicApp {
     func completeSelfTest() {
         let script = """
         await new Promise(resolve => setTimeout(resolve, 120));
+        window.__moyaMusic.allowPlayback();
         const clock = window.__moyaMusic.state();
-        const audio = new Audio(); audio.play().catch(()=>{}); audio.currentTime = 31;
+        window.__moyaMusic.silence();
+        const audio = new Audio();
+        const blocked = await audio.play().then(()=>false,()=>true);
+        const context = new AudioContext(); await context.resume();
+        const contextBlocked = context.state === 'suspended'; await context.close();
+        window.__moyaMusic.allowPlayback();
+        audio.play().catch(()=>{}); audio.currentTime = 31;
         await window.__moyaMusic.command('nexttrack');
         const seekRequests = [];
         // Reproduce the site's handler: exact zero is ignored, positive times work.
@@ -52,14 +59,16 @@ extension MusicApp {
         await window.__moyaMusic.command('like');
         await window.__moyaMusic.command('dislike');
         await window.__moyaMusic.command('repeat');
-        return {state:window.__moyaMusic.state(),clock,next:document.body.dataset.next,handlerZero,handlerMiddle,mediaZero,seekRequests};
+        window.__moyaMusic.silence();
+        const wakeBlocked = await audio.play().then(()=>false,()=>true);
+        return {state:window.__moyaMusic.state(),wakeBlocked,contextBlocked,clock,next:document.body.dataset.next,handlerZero,handlerMiddle,mediaZero,seekRequests,blocked};
         """
         web.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
             guard case .success(let value) = result, let dict = value as? [String: Any], dict["next"] as? String == "ok",
                   let clock = dict["clock"] as? [String: Any], (clock["position"] as? Double ?? 0) > 23,
                   let state = dict["state"] as? [String: Any], state["title"] as? String == "Проверка",
                   state["position"] as? Double == 41, state["duration"] as? Double == 147,
-                  dict["handlerZero"] as? Double == 0.001, dict["handlerMiddle"] as? Double == 59,
+                  dict["blocked"] as? Bool == true, dict["wakeBlocked"] as? Bool == true, dict["contextBlocked"] as? Bool == true, dict["handlerZero"] as? Double == 0.001, dict["handlerMiddle"] as? Double == 59,
                   dict["mediaZero"] as? Double == 0, dict["seekRequests"] as? [Double] == [0.001,59],
                   state["liked"] as? Bool == true, state["disliked"] as? Bool == true,
                   state["repeat"] as? String == "one" else {
@@ -73,6 +82,7 @@ extension MusicApp {
             }
             self.setCompact(true)
             self.mini.contentView?.layoutSubtreeIfNeeded()
+            precondition(self.mini.frame.height <= 253, "Hidden settings must not enlarge the mini player")
             if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
                 self.savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-compact.png")
             }
@@ -89,6 +99,19 @@ extension MusicApp {
                 print("SELF_TEST_FAILED: artwork enlarged window"); exit(1)
             }
             self.checkQueuePresentation()
+            self.setCompact(true)
+            self.showConnectionSettings()
+            self.mini.contentView?.layoutSubtreeIfNeeded()
+            precondition(self.settingsOpen && self.queueOverlay && !self.connectionPanel.isHidden)
+            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { self.savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-settings.png") }
+            self.connectionPanel.showProxy(true)
+            self.mini.contentView?.layoutSubtreeIfNeeded()
+            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { self.savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-proxy.png") }
+            self.closeQueueOverlay()
+            precondition(self.compact && !self.settingsOpen)
+            let pinned = self.alwaysOnTop
+            self.togglePin(); precondition(self.mini.level == (self.alwaysOnTop ? .floating:.normal))
+            self.togglePin(); precondition(self.alwaysOnTop == pinned)
             self.setCompact(original)
             if ProcessInfo.processInfo.arguments.contains("--window-test") { self.runNativeWindowTest(); return }
             print("SELF_TEST_OK: elapsed time, detached audio, zero/middle seeks through handler and media, like/dislike/repeat, compact layout and large artwork")
@@ -116,7 +139,7 @@ extension MusicApp {
             savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-mine.png")
         }
         let bounds = sourceSwitch.bounds
-        precondition(bounds.width >= 164 && bounds.height >= 32)
+        precondition(bounds.width >= 128 && bounds.height >= 28)
         print("SOURCE_SWITCH_OK: arrows select both sources; state updates send no playback command")
     }
     func checkQueuePresentation() {

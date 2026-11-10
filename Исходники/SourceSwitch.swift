@@ -14,16 +14,16 @@ final class SourceSwitch: NSSegmentedControl {
         super.init(frame: frameRect)
         segmentCount = 2; trackingMode = .selectOne; segmentStyle = .rounded
         setLabel("Волна", forSegment: 0); setLabel("Моё", forSegment: 1)
-        for index in 0...1 { setWidth(80, forSegment: index) }
+        for index in 0...1 { setWidth(62, forSegment: index) }
         selectedSegment = 0
-        font = .systemFont(ofSize: 11, weight: .medium)
+        font = .systemFont(ofSize: 10, weight: .medium)
         focusRingType = .none
         setAccessibilityLabel("Источник музыки")
         setToolTip("Персональные рекомендации", forSegment: 0)
         setToolTip("Понравившиеся треки", forSegment: 1)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override var intrinsicContentSize: NSSize { NSSize(width:164,height:32) }
+    override var intrinsicContentSize: NSSize { NSSize(width:128,height:28) }
     func showSelection(_ index: Int, animated: Bool = true) {
         guard index == 0 || index == 1 else { return }
         selectedSegment = index
@@ -91,11 +91,11 @@ final class SourceSwitch: NSSegmentedControl {
             let normal = NSColor.white.withAlphaComponent(0.62 + (hoveredSegment == index ? hover * 0.24 : 0))
             let color = normal.blended(withFraction:active,of:.yellow) ?? normal
             let text = (index == 0 ? "Волна" : "Моё") as NSString
-            let attributes: [NSAttributedString.Key:Any] = [.font:font ?? NSFont.systemFont(ofSize:11,weight:.medium),.foregroundColor:color]
+            let attributes: [NSAttributedString.Key:Any] = [.font:font ?? NSFont.systemFont(ofSize:10,weight:.medium),.foregroundColor:color]
             let textSize = text.size(withAttributes:attributes)
-            let start = inner.minX+CGFloat(index)*width+(width-16-7-textSize.width)/2
-            IconLibrary.draw(IconLibrary.image(index == 0 ? "audio-waveform" : "heart",size:16),in:NSRect(x:start,y:bounds.midY-8,width:16,height:16),color:color)
-            text.draw(at:NSPoint(x:start+23,y:bounds.midY-textSize.height/2),withAttributes:attributes)
+            let start = inner.minX+CGFloat(index)*width+(width-14-5-textSize.width)/2
+            IconLibrary.draw(IconLibrary.image(index == 0 ? "audio-waveform" : "heart",size:14),in:NSRect(x:start,y:bounds.midY-7,width:14,height:14),color:color)
+            text.draw(at:NSPoint(x:start+19,y:bounds.midY-textSize.height/2),withAttributes:attributes)
         }
         if window?.firstResponder === self {
             NSColor.white.withAlphaComponent(0.25).setStroke(); capsule.lineWidth = 1; capsule.stroke()

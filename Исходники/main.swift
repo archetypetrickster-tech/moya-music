@@ -323,6 +323,13 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     var likeButton: IconButton!
     var dislikeButton: IconButton!
     var repeatButton: IconButton!
+    var pinButton: IconButton!
+    var settingsButton: IconButton!
+    var alwaysOnTop = UserDefaults.standard.bool(forKey:"alwaysOnTop")
+    var connectionSettings = ConnectionSettings.load()
+    var artworkSession = URLSession(configuration:.default)
+    let connectionPanel = ConnectionPanel(frame:.zero)
+    var settingsOpen = false
     var sourceSwitch: SourceSwitch!
     var pendingSource: String?
     var pendingSourceAt = Date.distantPast
@@ -386,6 +393,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         setupWeb()
         setupMini()
         setupStatusItem()
+        if !selfTest { applyConnectionSettings() }
         if ProcessInfo.processInfo.arguments.contains("--debug") || liveTest {
             DistributedNotificationCenter.default().addObserver(self, selector: #selector(inspectPlayer(_:)), name: Notification.Name("ru.ninesquares.moyamusic.inspect"), object: nil)
         }
@@ -393,6 +401,9 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         mini.makeKeyAndOrderFront(nil)
         updateCardShadow()
         NSApp.activate(ignoringOtherApps: true)
+        for name in [NSWorkspace.willSleepNotification,NSWorkspace.didWakeNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(self,selector:#selector(pauseOnWake),name:name,object:nil)
+        }
         if selfTest { runSelfTest(); return }
         web.load(URLRequest(url: URL(string: "https://music.yandex.ru/")!))
         if liveTest || !UserDefaults.standard.bool(forKey: "hasPlayed") { showLibrary() }
@@ -430,6 +441,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         let windowItem = NSMenuItem(); main.addItem(windowItem)
         let windowMenu = NSMenu(title: "Окно"); windowItem.submenu = windowMenu
         windowMenu.addItem(withTitle: "Закрыть окно", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowMenu.addItem(withTitle:"Настройки…",action:#selector(showConnectionSettings),keyEquivalent:",").target = self
         windowMenu.addItem(withTitle: "Обновить библиотеку", action: #selector(reload), keyEquivalent: "r").target = self
         windowMenu.addItem(withTitle: "Свернуть плеер", action: #selector(minimizePlayer), keyEquivalent: "m").target = self
         let fullscreen = windowMenu.addItem(withTitle: "На весь экран / выйти", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
@@ -438,20 +450,25 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         NSApp.mainMenu = main
     }
 
-    func setupWeb() {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
-        configuration.mediaTypesRequiringUserActionForPlayback = []
-        if #available(macOS 14.0, *) { configuration.preferences.inactiveSchedulingPolicy = .none }
+    func installWebScripts(_ controller: WKUserContentController) {
+        controller.removeAllUserScripts()
         let bridgeURL = Bundle.main.url(forResource: "bridge", withExtension: "js")!
-        let bridge = try! String(contentsOf: bridgeURL, encoding: .utf8)
-        configuration.userContentController.addUserScript(WKUserScript(source: bridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        let bridge = "window.__moyaPlaybackAllowed = \(UserDefaults.standard.bool(forKey:"autoplay") && !selfTest ? "true":"false");\n" + (try! String(contentsOf: bridgeURL, encoding: .utf8))
+        controller.addUserScript(WKUserScript(source: bridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         if let queueURL = Bundle.main.url(forResource: "queue-engine", withExtension: "js"), let queueScript = try? String(contentsOf: queueURL, encoding: .utf8) {
             let history = UserDefaults.standard.array(forKey: "queueHistory") ?? []
             let historyData = (try? JSONSerialization.data(withJSONObject: history)) ?? Data("[]".utf8)
             let historyJSON = String(data: historyData, encoding: .utf8) ?? "[]"
-            configuration.userContentController.addUserScript(WKUserScript(source: "if (/^music\\.yandex\\.(ru|com|by|kz|uz)$/.test(location.hostname)) { window.__moyaQueueHistory=\(historyJSON);\n" + queueScript + "\n}", injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+            controller.addUserScript(WKUserScript(source: "if (/^music\\.yandex\\.(ru|com|by|kz|uz)$/.test(location.hostname)) { window.__moyaQueueHistory=\(historyJSON);\n" + queueScript + "\n}", injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         }
+    }
+    func setupWeb() {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        if !selfTest { connectionSettings.apply(to:configuration.websiteDataStore,password:connectionSettings.enabled && !connectionSettings.username.isEmpty ? ConnectionSettings.password():"") }
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        if #available(macOS 14.0, *) { configuration.preferences.inactiveSchedulingPolicy = .none }
+        installWebScripts(configuration.userContentController)
         configuration.userContentController.add(self, name: "music")
         web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self; web.uiDelegate = self
@@ -514,16 +531,28 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         sourceSwitch = SourceSwitch(frame:.zero)
         sourceSwitch.target = self; sourceSwitch.action = #selector(sourceSwitchChanged(_:))
         sourceSwitch.translatesAutoresizingMaskIntoConstraints = false
-        sourceSwitch.widthAnchor.constraint(equalToConstant:164).isActive = true
-        sourceSwitch.heightAnchor.constraint(equalToConstant:32).isActive = true
-        shuffleButton = iconButton("shuffle", "Случайный порядок", #selector(toggleShuffle), 16)
+        sourceSwitch.widthAnchor.constraint(equalToConstant:128).isActive = true
+        sourceSwitch.heightAnchor.constraint(equalToConstant:28).isActive = true
+        shuffleButton = iconButton("shuffle", "Случайный порядок", #selector(toggleShuffle), 16, 28)
         shuffleButton.isEnabled = false
-        compactButton = iconButton("minimize-in", "Компактный вид", #selector(toggleCompact), 16)
-        let libraryButton = iconButton("square.grid.2x2", "Открыть библиотеку", #selector(showLibrary), 16)
-        repeatButton = iconButton("repeat", "Повтор выключен", #selector(toggleRepeat), 16)
+        compactButton = iconButton("minimize-in", "Компактный вид", #selector(toggleCompact), 16, 28)
+        let libraryButton = iconButton("square.grid.2x2", "Открыть библиотеку", #selector(showLibrary), 16, 28)
+        repeatButton = iconButton("repeat", "Повтор выключен", #selector(toggleRepeat), 16, 28)
         repeatButton.isEnabled = false
-        let top = NSStackView(views: [shuffleButton!, repeatButton!, sourceSwitch!, libraryButton, compactButton])
-        top.orientation = .horizontal; top.spacing = 4; top.distribution = .equalSpacing; top.alignment = .centerY
+        pinButton = iconButton("pushpin","Поверх окон",#selector(togglePin),16, 28)
+        pinButton.selected = alwaysOnTop
+        pinButton.image = IconLibrary.image(alwaysOnTop ? "pushpin-filled":"pushpin",size:16)
+        let shield = NSImage(systemSymbolName:"gearshape",accessibilityDescription:nil)!
+        shield.size = NSSize(width:16,height:16)
+        settingsButton = IconButton(image:shield,target:self,action:#selector(showConnectionSettings))
+        settingsButton.isBordered = false; settingsButton.translatesAutoresizingMaskIntoConstraints = false
+        settingsButton.widthAnchor.constraint(equalToConstant:28).isActive = true; settingsButton.heightAnchor.constraint(equalToConstant:28).isActive = true
+        settingsButton.setAccessibilityLabel("Настройки")
+        let proxyMenu = NSMenu()
+        proxyMenu.addItem(withTitle:"Настройки…",action:#selector(showConnectionSettings),keyEquivalent:"").target = self
+        settingsButton.menu = proxyMenu
+        let top = NSStackView(views: [libraryButton, repeatButton!, shuffleButton!, sourceSwitch!, settingsButton!, pinButton!, compactButton])
+        top.orientation = .horizontal; top.spacing = 2; top.distribution = .equalSpacing; top.alignment = .centerY
         for artwork in [cover,compactArtwork] {
             artwork.image = nil
             artwork.contentTintColor = accent; artwork.imageScaling = .scaleProportionallyUpOrDown
@@ -632,16 +661,16 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         setupWindowChrome()
         layoutAmbient()
         if UserDefaults.standard.bool(forKey: "compact") { setCompact(true) }
-        UserDefaults.standard.removeObject(forKey: "pinned")
+        // Pin preference is stored independently from earlier versions.
     }
 
-    func iconButton(_ symbol: String, _ help: String, _ action: Selector, _ size: CGFloat) -> IconButton {
+    func iconButton(_ symbol: String, _ help: String, _ action: Selector, _ size: CGFloat, _ edge: CGFloat = 32) -> IconButton {
         let image = IconLibrary.image(symbol, size: size)
         let button = IconButton(image: image, target: self, action: action)
         button.isBordered = false; button.toolTip = help; button.setAccessibilityLabel(help)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.widthAnchor.constraint(equalToConstant: 32).isActive = true
-        button.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        button.widthAnchor.constraint(equalToConstant: edge).isActive = true
+        button.heightAnchor.constraint(equalToConstant: edge).isActive = true
         return button
     }
 
@@ -730,6 +759,18 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             panel.onTogglePlayback = { [weak self] in self?.togglePlay() }
         }
         overlayQueue.onBack = { [weak self] in self?.closeQueueOverlay() }
+        root.addSubview(connectionPanel); connectionPanel.isHidden = true
+        NSLayoutConstraint.activate([connectionPanel.leadingAnchor.constraint(equalTo:overlayQueue.leadingAnchor),connectionPanel.trailingAnchor.constraint(equalTo:overlayQueue.trailingAnchor),connectionPanel.topAnchor.constraint(equalTo:overlayQueue.topAnchor),connectionPanel.bottomAnchor.constraint(equalTo:overlayQueue.bottomAnchor)])
+        connectionPanel.onBack = { [weak self] in self?.closeQueueOverlay() }
+        connectionPanel.onSave = { [weak self] value,password in
+            guard let self else { return "Плеер закрыт" }
+            guard value.username.isEmpty || !password.isEmpty else { return "Введите пароль для указанного логина." }
+            guard ConnectionSettings.savePassword(password) else { return "Не удалось сохранить пароль в Связке ключей." }
+            self.connectionSettings = value; value.save(); self.web.stopLoading(); self.applyConnectionSettings()
+            self.installWebScripts(self.web.configuration.userContentController)
+            self.web.reload()
+            return nil
+        }
         dockedQueue.onBack = { [weak self] in self?.collapseDockedQueue() }
         overlayQueue.prepare(docked: false); dockedQueue.prepare(docked: true)
         dockedQueue.translatesAutoresizingMaskIntoConstraints = true
@@ -743,27 +784,29 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         ])
     }
     var basePlayerHeight: CGFloat { (compact ? 222 : (playerWidth?.constant ?? 340) + 228) + chromeInset }
-    @objc func toggleQueue() {
+    @objc func toggleQueue() { presentOverlay(settings:false) }
+    func presentOverlay(settings: Bool) {
         guard !windowTransition && !fullScreenPhase.isTransitioning else { return }
         if queueOverlay { closeQueueOverlay(); return }
         let frozen = queueTransitionSnapshot()
         queueReturnFrame = mini.frame
-        queueOverlay = true
+        queueOverlay = true; settingsOpen = settings
+        connectionPanel.isHidden = !settings
         overlayQueue.prepare(docked: false); overlayQueue.showLoading()
-        playerContainer.isHidden = true; dockedQueue.isHidden = true; overlayQueue.isHidden = false
+        playerContainer.isHidden = true; dockedQueue.isHidden = true; overlayQueue.isHidden = settings
         mini.minSize = NSSize(width: 340, height: 222)
         var frame = mini.frame
         if !preservesSystemFrame {
             let height = max(frame.height, min(frame.width, 660) + 228 + windowTopReserve)
             frame.origin.y += frame.height - height; frame.size.height = height
         }
-        animateQueueChange(to: frame, showing: overlayQueue, frozen: frozen)
-        fetchQueue()
+        animateQueueChange(to: frame, showing: settings ? connectionPanel:overlayQueue, frozen: frozen)
+        if !settings { fetchQueue() }
     }
     func closeQueueOverlay() {
         guard queueOverlay && !windowTransition else { return }
         let frozen = queueTransitionSnapshot()
-        queueOverlay = false; overlayQueue.isHidden = true; playerContainer.isHidden = false
+        queueOverlay = false; settingsOpen = false; connectionPanel.isHidden = true; overlayQueue.isHidden = true; playerContainer.isHidden = false
         mini.minSize = NSSize(width: 340, height: 222)
         var frame = queueReturnFrame ?? mini.frame
         if preservesSystemFrame { frame = mini.frame }
@@ -821,7 +864,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         if dockedQueue.frame != frame { dockedQueue.frame = frame; dockedQueue.needsLayout = true }
         if dockedQueue.isHidden == showDocked { dockedQueue.isHidden = !showDocked }
         queueButton?.selected = showDocked || queueOverlay
-        let wants = queueOverlay || showDocked
+        let wants = (queueOverlay && !settingsOpen) || showDocked
         if wants != queueWatching {
             queueWatching = wants
             web?.evaluateJavaScript("window.__moyaQueue?.watch(\(wants ? "true" : "false")); null", completionHandler: nil)
@@ -829,7 +872,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         } else if changed && showDocked { fetchQueue() }
     }
     func fetchQueue() {
-        guard !queueFetching, queueOverlay || dockedQueueVisible else { return }
+        guard !queueFetching, !settingsOpen, queueOverlay || dockedQueueVisible else { return }
         queueFetching = true
         web.callAsyncJavaScript("return await window.__moyaQueue?.refresh()", arguments: [:], in: nil, in: .page) { [weak self] result in
             guard let self else { return }; self.queueFetching = false
@@ -844,7 +887,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     }
     func selectQueueTrack(_ track: QueueTrack) {
         guard let data = try? JSONSerialization.data(withJSONObject: ["id":track.id,"index":track.index,"url":track.url]), let json = String(data: data, encoding: .utf8) else { return }
-        web.evaluateJavaScript("(() => { const t=\(json); window.__moyaQueue?.select(t.id,t.index,t.url).then(() => window.__moyaQueue?.refresh()).then(value=>{if(value)window.webkit.messageHandlers.music.postMessage({queueSnapshot:value})}); return true; })()", completionHandler: nil)
+        web.evaluateJavaScript("(() => { const t=\(json); (window.__moyaMusic?.allowPlayback(),window.__moyaQueue?.select(t.id,t.index,t.url)).then(() => window.__moyaQueue?.refresh()).then(value=>{if(value)window.webkit.messageHandlers.music.postMessage({queueSnapshot:value})}); return true; })()", completionHandler: nil)
     }
 
     func command(_ action: String, value: Double = 0) {
@@ -960,7 +1003,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             setArtworkImage(nil,animated:false)
             setAmbient(nil); return
         }
-        artworkTask = URLSession.shared.dataTask(with: url) { data, _, _ in
+        artworkTask = artworkSession.dataTask(with: url) { data, _, _ in
             guard let data, let image = NSImage(data: data) else { return }
             let ambient = self.makeAmbient(data)
             DispatchQueue.main.async {

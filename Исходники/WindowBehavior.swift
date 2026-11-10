@@ -88,7 +88,7 @@ extension MusicApp {
         fullScreenPhase != .windowed || mini.styleMask.contains(.fullScreen)
     }
     var usesSystemPlacementFrame: Bool {
-        if usesNativeWindowControls || mini.isZoomed { return true }
+        if usesNativeWindowControls { return true }
         guard let bounds = mini.screen?.visibleFrame else { return false }
         let frame = mini.frame
         let gridWidth = [1.0, 0.5, 1.0/3.0, 2.0/3.0].contains { abs(frame.width - bounds.width * $0) <= 24 }
@@ -147,6 +147,7 @@ extension MusicApp {
         chromeView?.isHidden = native
         if native { chromeHide?.cancel(); chromeView?.alphaValue = 0; chromeVisible = false }
         mini.isMovableByWindowBackground = !native
+        mini.level = !native && alwaysOnTop ? .floating:.normal
         surface?.layer?.cornerRadius = native ? 0 : 14
         updateCardShadow()
     }
@@ -225,7 +226,7 @@ extension MusicApp {
     func cancelWindowTransition() {
         transitionGeneration += 1; frameAnimator.cancel()
         transitionSnapshot?.removeFromSuperview(); transitionSnapshot = nil
-        for view in [playerContainer, overlayQueue] {
+        for view in [playerContainer, overlayQueue, connectionPanel] {
             view?.layer?.removeAllAnimations(); view?.alphaValue = 1
         }
         windowTransition = false; compactButton?.isEnabled = true

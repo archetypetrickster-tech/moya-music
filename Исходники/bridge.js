@@ -7,19 +7,27 @@
   for (const name of ['AudioContext', 'webkitAudioContext']) {
     const Constructor = window[name];
     if (Constructor) window[name] = new Proxy(Constructor, {construct(target, args) {
-      const context = Reflect.construct(target, args); contexts.add(context); return context;
+      const context = Reflect.construct(target, args); contexts.add(context);
+      const resume = context.resume.bind(context);
+      context.resume = () => window.__moyaPlaybackAllowed ? resume() : Promise.resolve();
+      if (!window.__moyaPlaybackAllowed) context.suspend().catch(()=>{});
+      return context;
     }});
   }
   const nativePlay = HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play = function(...args) {
     activeMedia = this;
+    if (!window.__moyaPlaybackAllowed) {
+      this.pause();
+      return Promise.reject(new DOMException('Нажмите воспроизведение в плеере', 'NotAllowedError'));
+    }
     if (localRepeat) this.loop = true;
     return nativePlay.apply(this, args);
   };
   if (session) {
     const original = session.setActionHandler.bind(session);
     session.setActionHandler = (action, handler) => {
-      original(action, handler);
+      original(action, handler && action === "play" ? details => { allowPlayback(); handler(details); } : handler);
       if (handler) handlers.set(action, handler); else handlers.delete(action);
     };
     if (session.setPositionState) {
@@ -55,7 +63,7 @@
   const pressed = b => !!b && b.getAttribute('aria-pressed') === 'true';
   function state() {
     const m = session?.metadata, a = media();
-    const playing = session?.playbackState === 'playing' || !!(a && !a.paused);
+    const playing = !!window.__moyaPlaybackAllowed && (session?.playbackState === 'playing' || !!(a && !a.paused));
     let duration = a && Number.isFinite(a.duration) ? a.duration : positionState?.duration || 0;
     let position = a && Number.isFinite(a.currentTime) ? a.currentTime : positionState?.position || 0;
     if (!a && positionState && playing) position += (performance.now() - positionState.stamp) / 1000 * (positionState.playbackRate || 1);
@@ -76,6 +84,17 @@
     if (isMusic()) window.webkit?.messageHandlers?.music?.postMessage(result);
     return result;
   }
+  function allowPlayback() { window.__moyaPlaybackAllowed = true; }
+  function silence() {
+    window.__moyaPlaybackAllowed = false;
+    sessionStorage.removeItem('moyaPending'); sessionStorage.removeItem('moyaQueuePlay');
+    media()?.pause();
+    for (const context of contexts) context.suspend().catch(()=>{});
+  }
+  document.addEventListener('click', e => {
+    const button = e.target.closest?.('button,[role="button"]');
+    if (e.isTrusted && button && (/воспроиз|слушать|продолжить|play/i.test(button.getAttribute('aria-label') || button.title || '') || /playButton/i.test(button.className))) allowPlayback();
+  }, true);
   function selectSource(source) {
     const target = source === 'wave' ? '/' : '/collection';
     sessionStorage.setItem('moyaPending', JSON.stringify({source, target, stamp: Date.now()}));
@@ -114,6 +133,7 @@
     const pause = buttons.find(b => /^(пауза|приостановить|pause)$/i.test(b.getAttribute('aria-label') || b.title || ''));
     if (!play && !pause) return;
     if (!nativeGesture) { window.webkit?.messageHandlers?.music?.postMessage({startSource:true}); return; }
+    allowPlayback();
     for (const context of contexts) if (context.state === 'suspended') context.resume().catch(() => {});
     if (play) play.click();
     pending.clickedAt = Date.now();
@@ -123,6 +143,8 @@
   async function command(action, value) {
     if (!isMusic() && location.protocol !== 'file:') return 'unavailable';
     for (const context of contexts) if (context.state === 'suspended') context.resume().catch(() => {});
+    if (action === 'toggle') action = state().playing ? 'pause' : 'play';
+    if (['play','wave','likes','nexttrack','previoustrack'].includes(action)) allowPlayback();
     const a = media();
     controlsStamp = -Infinity;
     if (action === 'wave' || action === 'likes') return selectSource(action);
@@ -163,6 +185,6 @@
     if (button) { button.click(); return 'button'; }
     return 'unavailable';
   }
-  window.__moyaMusic = {state, command, startPendingSource, wakeAudio: () => { for (const context of contexts) if (context.state === 'suspended') context.resume().catch(() => {}); }};
+  window.__moyaMusic = {allowPlayback, silence, state, command, startPendingSource, wakeAudio: () => { for (const context of contexts) if (context.state === 'suspended') context.resume().catch(() => {}); }};
   setInterval(() => { startPendingSource(); state(); }, 400);
 })();
