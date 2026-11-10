@@ -1,0 +1,23 @@
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Моя музыка</title>
+        <item>
+            <title>0.9.0</title>
+            <pubDate>Tue, 10 Nov 2026 22:36:53 +0300</pubDate>
+            <link>https://github.com/archetypetrickster-tech/my-music</link>
+            <sparkle:version>900</sparkle:version>
+            <sparkle:shortVersionString>0.9.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Моя музыка 0.9.0</h2>
+<ul><li>Проверка и установка новых версий прямо из виджета.</li><li>Версия приложения и ссылка на GitHub внизу настроек.</li></ul>
+<p>Музыка по-прежнему не запускается автоматически. Для установки следующего обновления не понадобится скачивать архив вручную.</p>
+]]></description>
+            <enclosure url="https://github.com/archetypetrickster-tech/my-music/releases/download/v0.9.0/my-music-update.zip" length="1750330" type="application/octet-stream" sparkle:edSignature="Wyyw0yea34LqHC19x/py1U0awqWNtPpE5E/mcBLH+BD15bCWG0iTVGu0YDQHz0OWZaDOfozTT3r9ce1bS/KvBg=="></enclosure>
+        </item>
+    </channel>
+</rss><!-- sparkle-signatures:
+edSignature: F4LwuUe7dyxCZyp80YcBeSCTxFZn6BTbELZgT3kBhz2Tc2oc83mh+FZRC7yTKT15NgHasIcRcnGlsZXfZ4BeCw==
+length: 1686
+-->
