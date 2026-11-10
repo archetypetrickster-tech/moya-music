@@ -10,77 +10,105 @@ extension MusicApp {
     func runSelfTest() {
         mini.contentView?.layoutSubtreeIfNeeded()
         precondition(playerTop.constant == chromeInset, "Startup header inset is stale")
-        let controls = controlsRow.convert(controlsRow.bounds, to:surface)
-        precondition(controls.minY >= surface.bounds.minY && controls.maxY <= surface.bounds.maxY, "Startup controls are clipped")
+        let controls = controlsRow.convert(controlsRow.bounds, to: surface)
+        precondition(
+            controls.minY >= surface.bounds.minY && controls.maxY <= surface.bounds.maxY,
+            "Startup controls are clipped")
         if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
-            savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-startup.png")
+            savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-startup.png")
         }
         print("STARTUP_LAYOUT_OK: header inset and playback controls fit")
-        web.loadHTMLString("""
-        <html><body><section data-test-id="VIBE_PLAYERBAR">
-        <button data-test-id="LIKE_BUTTON" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Like</button>
-        <button data-test-id="DISLIKE_BUTTON" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Dislike</button>
-        <button data-test-id="REPEAT_BUTTON_NO_REPEAT" onclick="this.setAttribute('data-test-id','REPEAT_BUTTON_REPEAT_ONE')">Repeat</button>
-        </section><script>
-        navigator.mediaSession.metadata = new MediaMetadata({title:'Проверка',artist:'Моя музыка'});
-        navigator.mediaSession.setActionHandler('nexttrack', () => { document.body.dataset.next = 'ok'; });
-        navigator.mediaSession.setPositionState({duration:147,position:23,playbackRate:1});
-        navigator.mediaSession.playbackState = 'playing';
-        </script></body></html>
-        """, baseURL: Bundle.main.resourceURL)
+        web.loadHTMLString(
+            """
+            <html><body><section data-test-id="VIBE_PLAYERBAR">
+            <button data-test-id="LIKE_BUTTON" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Like</button>
+            <button data-test-id="DISLIKE_BUTTON" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Dislike</button>
+            <button data-test-id="REPEAT_BUTTON_NO_REPEAT" onclick="this.setAttribute('data-test-id','REPEAT_BUTTON_REPEAT_ONE')">Repeat</button>
+            </section><script>
+            navigator.mediaSession.metadata = new MediaMetadata({title:'Проверка',artist:'Моя музыка'});
+            navigator.mediaSession.setActionHandler('nexttrack', () => { document.body.dataset.next = 'ok'; });
+            navigator.mediaSession.setPositionState({duration:147,position:23,playbackRate:1});
+            navigator.mediaSession.playbackState = 'playing';
+            </script></body></html>
+            """, baseURL: Bundle.main.resourceURL)
     }
     func completeSelfTest() {
         let script = """
-        await new Promise(resolve => setTimeout(resolve, 120));
-        window.__moyaMusic.allowPlayback();
-        const clock = window.__moyaMusic.state();
-        window.__moyaMusic.silence();
-        const audio = new Audio();
-        const blocked = await audio.play().then(()=>false,()=>true);
-        const context = new AudioContext(); await context.resume();
-        const contextBlocked = context.state === 'suspended'; await context.close();
-        window.__moyaMusic.allowPlayback();
-        audio.play().catch(()=>{}); audio.currentTime = 31;
-        await window.__moyaMusic.command('nexttrack');
-        const seekRequests = [];
-        // Reproduce the site's handler: exact zero is ignored, positive times work.
-        navigator.mediaSession.setActionHandler('seekto', ({seekTime}) => {
-            seekRequests.push(seekTime);
-            if (seekTime) audio.currentTime = seekTime;
-        });
-        await window.__moyaMusic.command('seekto', 0);
-        const handlerZero = audio.currentTime;
-        await window.__moyaMusic.command('seekto', 59);
-        const handlerMiddle = audio.currentTime;
-        navigator.mediaSession.setActionHandler('seekto', null);
-        await window.__moyaMusic.command('seekto', 0);
-        const mediaZero = audio.currentTime;
-        await window.__moyaMusic.command('seekto', 41);
-        await window.__moyaMusic.command('like');
-        await window.__moyaMusic.command('dislike');
-        await window.__moyaMusic.command('repeat');
-        window.__moyaMusic.silence();
-        const wakeBlocked = await audio.play().then(()=>false,()=>true);
-        return {state:window.__moyaMusic.state(),wakeBlocked,contextBlocked,clock,next:document.body.dataset.next,handlerZero,handlerMiddle,mediaZero,seekRequests,blocked};
-        """
+            await new Promise(resolve => setTimeout(resolve, 120));
+            window.__moyaMusic.allowPlayback();
+            const clock = window.__moyaMusic.state();
+            window.__moyaMusic.silence();
+            const audio = new Audio();
+            const blocked = await audio.play().then(()=>false,()=>true);
+            const context = new AudioContext(); await context.resume();
+            const contextBlocked = context.state === 'suspended'; await context.close();
+            window.__moyaMusic.allowPlayback();
+            audio.play().catch(()=>{}); audio.currentTime = 31;
+            await window.__moyaMusic.command('nexttrack');
+            const seekRequests = [];
+            // Reproduce the site's handler: exact zero is ignored, positive times work.
+            navigator.mediaSession.setActionHandler('seekto', ({seekTime}) => {
+                seekRequests.push(seekTime);
+                if (seekTime) audio.currentTime = seekTime;
+            });
+            await window.__moyaMusic.command('seekto', 0);
+            const handlerZero = audio.currentTime;
+            await window.__moyaMusic.command('seekto', 59);
+            const handlerMiddle = audio.currentTime;
+            navigator.mediaSession.setActionHandler('seekto', null);
+            await window.__moyaMusic.command('seekto', 0);
+            const mediaZero = audio.currentTime;
+            await window.__moyaMusic.command('seekto', 41);
+            await window.__moyaMusic.command('like');
+            await window.__moyaMusic.command('dislike');
+            await window.__moyaMusic.command('repeat');
+            window.__moyaMusic.silence();
+            const wakeBlocked = await audio.play().then(()=>false,()=>true);
+            return {state:window.__moyaMusic.state(),wakeBlocked,contextBlocked,clock,next:document.body.dataset.next,handlerZero,handlerMiddle,mediaZero,seekRequests,blocked};
+            """
         web.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
-            guard case .success(let value) = result, let dict = value as? [String: Any], dict["next"] as? String == "ok",
-                  let clock = dict["clock"] as? [String: Any], (clock["position"] as? Double ?? 0) > 23,
-                  let state = dict["state"] as? [String: Any], state["title"] as? String == "Проверка",
-                  state["position"] as? Double == 41, state["duration"] as? Double == 147,
-                  dict["blocked"] as? Bool == true, dict["wakeBlocked"] as? Bool == true, dict["contextBlocked"] as? Bool == true, dict["handlerZero"] as? Double == 0.001, dict["handlerMiddle"] as? Double == 59,
-                  dict["mediaZero"] as? Double == 0, dict["seekRequests"] as? [Double] == [0.001,59],
-                  state["liked"] as? Bool == true, state["disliked"] as? Bool == true,
-                  state["repeat"] as? String == "one" else {
-                print("SELF_TEST_FAILED: \(result)"); exit(1)
+            guard case .success(let value) = result, let dict = value as? [String: Any],
+                dict["next"] as? String == "ok",
+                let clock = dict["clock"] as? [String: Any], (clock["position"] as? Double ?? 0) > 23,
+                let state = dict["state"] as? [String: Any], state["title"] as? String == "Проверка",
+                state["position"] as? Double == 41, state["duration"] as? Double == 147,
+                dict["blocked"] as? Bool == true, dict["wakeBlocked"] as? Bool == true,
+                dict["contextBlocked"] as? Bool == true, dict["handlerZero"] as? Double == 0.001,
+                dict["handlerMiddle"] as? Double == 59,
+                dict["mediaZero"] as? Double == 0, dict["seekRequests"] as? [Double] == [0.001, 59],
+                state["liked"] as? Bool == true, state["disliked"] as? Bool == true,
+                state["repeat"] as? String == "one"
+            else {
+                print("SELF_TEST_FAILED: \(result)")
+                exit(1)
             }
-            precondition(MusicApp.trackPageURL("/album/12/track/34")?.absoluteString == "https://music.yandex.ru/album/12/track/34")
+            precondition(
+                MusicApp.trackPageURL("/album/12/track/34")?.absoluteString
+                    == "https://music.yandex.ru/album/12/track/34")
             precondition(MusicApp.trackPageURL("https://example.org/track/34") == nil)
+            precondition(MusicApp.trackPageURL("https://user:secret@music.yandex.ru/track/34") == nil)
+            precondition(MusicApp.trackPageURL("https://music.yandex.ru:9443/track/34") == nil)
+            precondition(MusicApp.trackPageURL("https://music.yandex.ru/not/track/34") == nil)
+            precondition(!MusicService.allowsNavigation(URL(string: "file:///tmp/private.txt")!))
+            precondition(!MusicService.allowsNavigation(URL(string: "http://music.yandex.ru")!))
+            precondition(MusicService.allowsNavigation(URL(string: "https://music.yandex.ru")!))
+            let sanitized = MusicService.sanitizeHistory([
+                [
+                    "id": "1", "title": "Test", "duration": Double.nan, "url": "file:///tmp/private.txt",
+                    "unknown": NSNull(),
+                ]
+            ])
+            precondition(
+                sanitized.first?["duration"] as? Double == 0 && sanitized.first?["url"] as? String == ""
+                    && sanitized.first?["unknown"] == nil)
             self.update(state)
             self.checkSourceSwitch()
             let original = self.compact
-            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_ARTWORK"], let data = try? Data(contentsOf: URL(fileURLWithPath: path)), let image = NSImage(data: data) {
-                self.setArtworkImage(image,animated:false); self.setAmbient(self.makeAmbient(data))
+            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_ARTWORK"],
+                let data = try? Data(contentsOf: URL(fileURLWithPath: path)), let image = NSImage(data: data)
+            {
+                self.setArtworkImage(image, animated: false)
+                self.setAmbient(self.makeAmbient(data))
             }
             self.setCompact(true)
             self.settingsButton.hoverAmount = 1
@@ -94,138 +122,253 @@ extension MusicApp {
             self.mini.contentView?.layoutSubtreeIfNeeded()
             if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { self.savePreview(path) }
             let beforeArtwork = self.mini.frame.size
-            self.setArtworkImage(NSImage(size:NSSize(width:3000,height:3000)),animated:false)
+            self.setArtworkImage(NSImage(size: NSSize(width: 3000, height: 3000)), animated: false)
             self.titleLabel.stringValue = String(repeating: "Очень длинное название трека ", count: 12)
             self.mini.contentView?.layoutSubtreeIfNeeded()
             guard self.mini.frame.size == beforeArtwork,
-                  self.cover.intrinsicContentSize.width == NSView.noIntrinsicMetric,
-                  self.mini.frame.width <= 500 else {
-                print("SELF_TEST_FAILED: artwork enlarged window"); exit(1)
+                self.cover.intrinsicContentSize.width == NSView.noIntrinsicMetric,
+                self.mini.frame.width <= 500
+            else {
+                print("SELF_TEST_FAILED: artwork enlarged window")
+                exit(1)
             }
             self.checkQueuePresentation()
             self.setCompact(true)
             self.showConnectionSettings()
             self.mini.contentView?.layoutSubtreeIfNeeded()
-            precondition(self.settingsOpen && self.queueOverlay && !self.connectionPanel.isHidden && !self.queueButton.selected)
-            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { self.savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-settings.png") }
+            precondition(
+                self.settingsOpen && self.queueOverlay && !self.connectionPanel.isHidden
+                    && !self.queueButton.selected)
+            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
+                self.savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-settings.png")
+            }
             self.connectionPanel.showProxy(true)
             self.mini.contentView?.layoutSubtreeIfNeeded()
-            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { self.savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-proxy.png") }
+            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
+                self.savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-proxy.png")
+            }
             self.closeQueueOverlay()
             precondition(self.compact && !self.settingsOpen)
             let pinned = self.alwaysOnTop
-            self.togglePin(); precondition(self.mini.level == (self.alwaysOnTop ? .floating:.normal))
-            self.togglePin(); precondition(self.alwaysOnTop == pinned)
+            self.togglePin()
+            precondition(self.mini.level == (self.alwaysOnTop ? .floating : .normal))
+            self.togglePin()
+            precondition(self.alwaysOnTop == pinned)
             self.setCompact(original)
-            if ProcessInfo.processInfo.arguments.contains("--window-test") { self.runNativeWindowTest(); return }
-            print("SELF_TEST_OK: elapsed time, detached audio, zero/middle seeks through handler and media, like/dislike/repeat, compact layout and large artwork")
+            if ProcessInfo.processInfo.arguments.contains("--window-test") {
+                self.runNativeWindowTest()
+                return
+            }
+            print(
+                "SELF_TEST_OK: elapsed time, detached audio, zero/middle seeks through handler and media, like/dislike/repeat, compact layout and large artwork"
+            )
             NSApp.terminate(nil)
         }
     }
     func checkSourceSwitch() {
         let probe = SourceSwitchProbe()
-        let oldTarget = sourceSwitch.target, oldAction = sourceSwitch.action
-        sourceSwitch.target = probe; sourceSwitch.action = #selector(SourceSwitchProbe.changed(_:))
+        let oldTarget = sourceSwitch.target
+        let oldAction = sourceSwitch.action
+        sourceSwitch.target = probe
+        sourceSwitch.action = #selector(SourceSwitchProbe.changed(_:))
         defer {
-            sourceSwitch.target = oldTarget; sourceSwitch.action = oldAction
-            sourceSwitch.showSelection(0, animated:false)
+            sourceSwitch.target = oldTarget
+            sourceSwitch.action = oldAction
+            sourceSwitch.showSelection(0, animated: false)
         }
-        for code: UInt16 in [124,123] {
-            guard let event = NSEvent.keyEvent(with:.keyDown, location:.zero, modifierFlags:[], timestamp:0,
-                windowNumber:mini.windowNumber, context:nil, characters:"", charactersIgnoringModifiers:"", isARepeat:false, keyCode:code) else { fatalError("No key event") }
-            sourceSwitch.keyDown(with:event)
+        for code: UInt16 in [124, 123] {
+            guard
+                let event = NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: mini.windowNumber, context: nil, characters: "",
+                    charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)
+            else { fatalError("No key event") }
+            sourceSwitch.keyDown(with: event)
         }
-        precondition(probe.selections == [1,0])
-        sourceSwitch.showSelection(1, animated:false)
-        precondition(sourceSwitch.selectedSegment == 1 && probe.selections == [1,0])
+        precondition(probe.selections == [1, 0])
+        sourceSwitch.showSelection(1, animated: false)
+        precondition(sourceSwitch.selectedSegment == 1 && probe.selections == [1, 0])
         if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
             mini.contentView?.layoutSubtreeIfNeeded()
-            savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-mine.png")
+            savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-mine.png")
         }
         let bounds = sourceSwitch.bounds
         precondition(bounds.width >= 164 && bounds.height >= 32)
         print("SOURCE_SWITCH_OK: arrows select both sources; state updates send no playback command")
     }
     func checkQueuePresentation() {
-        var sample: [String:Any] = ["source":"wave", "playing":true, "ready":true,
-            "current":["title":"Сейчас играет", "artist":"Исполнитель"],
-            "tracks":[
-                ["id":"old", "title":"Предыдущая песня", "artist":"Исполнитель", "duration":185.0,"index":0,"bucket":"history","current":false],
-                ["id":"now", "title":"Сейчас играет", "artist":"Исполнитель", "duration":210.0,"index":1,"bucket":"current","current":true],
-                ["id":"next", "title":"Следующая песня", "artist":"Другой исполнитель", "duration":245.0,"index":2,"bucket":"upcoming","current":false]
-            ]]
+        var sample: [String: Any] = [
+            "source": "wave", "playing": true, "ready": true,
+            "current": ["title": "Сейчас играет", "artist": "Исполнитель"],
+            "tracks": [
+                [
+                    "id": "old", "title": "Предыдущая песня", "artist": "Исполнитель", "duration": 185.0,
+                    "index": 0, "bucket": "history", "current": false,
+                ],
+                [
+                    "id": "now", "title": "Сейчас играет", "artist": "Исполнитель", "duration": 210.0,
+                    "index": 1, "bucket": "current", "current": true,
+                ],
+                [
+                    "id": "next", "title": "Следующая песня", "artist": "Другой исполнитель",
+                    "duration": 245.0, "index": 2, "bucket": "upcoming", "current": false,
+                ],
+            ],
+        ]
         // A three-digit count exercises the queue header at the minimum window width.
-        let history: [[String:Any]] = (0..<100).map { index in
-            ["id":"history-\(index)", "title":"Песня \(index+1)", "artist":"Исполнитель", "duration":185.0,
-             "index":index+3, "bucket":"history", "current":false]
+        let history: [[String: Any]] = (0..<100).map { index in
+            [
+                "id": "history-\(index)", "title": "Песня \(index+1)", "artist": "Исполнитель",
+                "duration": 185.0,
+                "index": index + 3, "bucket": "history", "current": false,
+            ]
         }
-        sample["tracks"] = history + (sample["tracks"] as? [[String:Any]] ?? [])
+        sample["tracks"] = history + (sample["tracks"] as? [[String: Any]] ?? [])
         setCompact(true)
         let before = mini.frame
-        toggleQueue(); applyQueue(sample)
+        toggleQueue()
+        applyQueue(sample)
         mini.contentView?.layoutSubtreeIfNeeded()
         precondition(queueOverlay && mini.frame.height >= min(mini.frame.width, 660) + 228 + windowTopReserve)
-        if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-queue.png") }
+        if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
+            savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-queue.png")
+        }
         closeQueueOverlay()
         precondition(compact && abs(mini.frame.height - before.height) < 1)
         setCompact(false)
-        var frame = mini.frame; frame.origin.y -= 280; frame.size.height += 280
-        mini.setFrame(frame, display:true); layoutQueueRegion(); applyQueue(sample)
+        var frame = mini.frame
+        frame.origin.y -= 280
+        frame.size.height += 280
+        mini.setFrame(frame, display: true)
+        layoutQueueRegion()
+        applyQueue(sample)
         mini.contentView?.layoutSubtreeIfNeeded()
         precondition(dockedQueueVisible)
         precondition(dockedQueue.frame.maxY <= playerContainer.frame.minY - 7)
-        print("QUEUE_LAYOUT root=\(mini.contentView!.bounds) player=\(playerContainer.frame) dock=\(dockedQueue.frame)")
-        if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-docked.png") }
+        print(
+            "QUEUE_LAYOUT root=\(mini.contentView!.bounds) player=\(playerContainer.frame) dock=\(dockedQueue.frame)"
+        )
+        if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
+            savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-docked.png")
+        }
         collapseDockedQueue()
         mini.contentView?.layoutSubtreeIfNeeded()
-        precondition(timeRow.frame.height >= 14 && timeLabel.frame.height >= 14 && durationLabel.frame.height >= 14)
+        precondition(
+            timeRow.frame.height >= 14 && timeLabel.frame.height >= 14 && durationLabel.frame.height >= 14)
         let priorFrame = mini.frame
         if let screen = mini.screen {
             var topFrame = priorFrame
             topFrame.origin.y = screen.visibleFrame.maxY - topFrame.height
-            mini.setFrame(topFrame, display: true); positionChrome()
+            mini.setFrame(topFrame, display: true)
+            positionChrome()
             mini.contentView?.layoutSubtreeIfNeeded()
             precondition(chromeInset == 30)
             precondition(playerContainer.frame.maxY <= mini.contentView!.bounds.maxY - 29)
-            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-header.png") }
-            mini.setFrame(priorFrame, display: true); positionChrome()
+            if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
+                savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-header.png")
+            }
+            mini.setFrame(priorFrame, display: true)
+            positionChrome()
         }
     }
     func savePreview(_ path: String) {
-        guard let root = mini.contentView, let bitmap = root.bitmapImageRepForCachingDisplay(in: root.bounds) else { return }
+        guard let root = mini.contentView, let bitmap = root.bitmapImageRepForCachingDisplay(in: root.bounds)
+        else { return }
         root.cacheDisplay(in: root.bounds, to: bitmap)
         try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         if let chrome = chromeView,
-           let chromeBitmap = chrome.bitmapImageRepForCachingDisplay(in: chrome.bounds) {
+            let chromeBitmap = chrome.bitmapImageRepForCachingDisplay(in: chrome.bounds)
+        {
             let wasHovered = (chrome.subviews.first as? ChromeButton)?.groupHovered ?? false
             chrome.updateGroupHover(true)
             chrome.cacheDisplay(in: chrome.bounds, to: chromeBitmap)
             let chromePath = URL(fileURLWithPath: path).deletingPathExtension().path + "-chrome.png"
-            try? chromeBitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: chromePath))
+            try? chromeBitmap.representation(using: .png, properties: [:])?.write(
+                to: URL(fileURLWithPath: chromePath))
             chrome.updateGroupHover(wasHovered)
         }
     }
-    func waitForWindowTest(_ label: String, until ready: @escaping () -> Bool, then finish: @escaping () -> Void) {
+    func waitForWindowTest(
+        _ label: String, until ready: @escaping () -> Bool, then finish: @escaping () -> Void
+    ) {
         let deadline = Date().addingTimeInterval(15)
         func poll() {
-            if ready() { finish(); return }
-            if Date() > deadline { print("WINDOW_TEST_FAILED: \(label)"); fflush(stdout); exit(1) }
+            if ready() {
+                finish()
+                return
+            }
+            if Date() > deadline {
+                print("WINDOW_TEST_FAILED: \(label)")
+                fflush(stdout)
+                exit(1)
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: poll)
         }
         poll()
     }
+    func checkShadowEdgeAlignment(completion: @escaping () -> Void) {
+        guard let screen = mini.screen else { exit(1) }
+        let area = screen.visibleFrame
+        let cases: [(Bool, CGFloat)] = [
+            (false, 40), (false, 8), (false, 0), (false, 40), (true, 40), (true, 8), (true, 0), (true, 40),
+        ]
+        func step(_ index: Int) {
+            guard index < cases.count else {
+                setCompact(false)
+                print("SHADOW_EDGE_OK: full and compact, floating and internal chrome; no displacement")
+                completion()
+                return
+            }
+            let (small, gap) = cases[index]
+            setCompact(small)
+            let height: CGFloat = small ? 252 : 598
+            mini.setFrame(
+                NSRect(x: area.midX - 170, y: area.maxY - height - gap, width: 340, height: height),
+                display: true)
+            positionChrome()
+            mini.contentView?.layoutSubtreeIfNeeded()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [self] in
+                guard let shadow = cardShadowWindow else {
+                    print("SHADOW_EDGE_FAILED: missing panel")
+                    exit(1)
+                }
+                let card = mini.convertToScreen(surface.convert(surface.bounds, to: nil))
+                let expected = card.insetBy(dx: -24, dy: -24)
+                let actual = shadow.frame
+                let error =
+                    abs(actual.minX - expected.minX) + abs(actual.minY - expected.minY)
+                    + abs(actual.width - expected.width) + abs(actual.height - expected.height)
+                guard error < 0.5 else {
+                    print(
+                        "SHADOW_EDGE_FAILED: compact=\(small) gap=\(gap) expected=\(expected) actual=\(actual)"
+                    )
+                    fflush(stdout)
+                    exit(1)
+                }
+                precondition(shadow.constrainFrameRect(expected, to: screen) == expected)
+                precondition(surface.frame.minY == 0 && surface.frame.width == mini.frame.width)
+                step(index + 1)
+            }
+        }
+        step(0)
+    }
     func runNativeWindowTest() {
-        guard let screen = mini.screen else { print("WINDOW_TEST_FAILED: no screen"); exit(1) }
+        guard let screen = mini.screen else {
+            print("WINDOW_TEST_FAILED: no screen")
+            exit(1)
+        }
         let area = screen.visibleFrame
         setCompact(false)
         var frames = [
-            NSRect(x: area.minX, y: area.minY, width: area.width/2, height: area.height),
-            NSRect(x: area.midX, y: area.minY, width: area.width/2, height: area.height),
-            area
+            NSRect(x: area.minX, y: area.minY, width: area.width / 2, height: area.height),
+            NSRect(x: area.midX, y: area.minY, width: area.width / 2, height: area.height),
+            area,
         ]
-        if area.height/2 >= 598 {
-            frames += [NSRect(x: area.minX, y: area.midY, width: area.width/2, height: area.height/2),
-                       NSRect(x: area.midX, y: area.minY, width: area.width/2, height: area.height/2)]
+        if area.height / 2 >= 598 {
+            frames += [
+                NSRect(x: area.minX, y: area.midY, width: area.width / 2, height: area.height / 2),
+                NSRect(x: area.midX, y: area.minY, width: area.width / 2, height: area.height / 2),
+            ]
         }
         for target in frames {
             mini.setFrame(target, display: true)
@@ -237,7 +380,9 @@ extension MusicApp {
             mini.contentView?.layoutSubtreeIfNeeded()
             precondition(mini.frame == before && mini.frame.width >= target.width - 1)
             precondition(chromeGutter == 0 && chromeInset >= 30)
-            precondition(playerContainer.frame.width <= 660 && playerContainer.frame.width <= mini.contentView!.bounds.width)
+            precondition(
+                playerContainer.frame.width <= 660
+                    && playerContainer.frame.width <= mini.contentView!.bounds.width)
         }
         let baseline = NSRect(x: area.midX - 170, y: area.midY - 299, width: 340, height: 598)
         mini.setFrame(baseline, display: true)
@@ -245,7 +390,9 @@ extension MusicApp {
         precondition(chromeGutter == 30 && chromeInset == 0)
         precondition(chromeView.frame.minY >= surface.frame.maxY)
         precondition(chromeView.window === mini)
-        precondition(surface.frame.minX == 0 && surface.frame.minY == 0 && surface.frame.width == mini.contentView!.bounds.width)
+        precondition(
+            surface.frame.minX == 0 && surface.frame.minY == 0
+                && surface.frame.width == mini.contentView!.bounds.width)
         precondition(cardShadowWindow?.parent === mini && cardShadowWindow?.isVisible == true)
         precondition(cardShadowWindow?.ignoresMouseEvents == true && cardShadowWindow?.canBecomeKey == false)
         precondition(cardShadowWindow?.collectionBehavior.contains(.transient) == true)
@@ -254,51 +401,82 @@ extension MusicApp {
         fflush(stdout)
         let checkFullscreen = { [self] in
             toggleNativeFullScreen()
-            waitForWindowTest("enter fullscreen", until: { self.fullScreenPhase == .fullScreen && self.mini.styleMask.contains(.fullScreen) }) {
-                print("WINDOW_ENTER_STATE frame=\(self.mini.frame) closeHidden=\(String(describing:self.mini.standardWindowButton(.closeButton)?.isHidden)) zoomHidden=\(String(describing:self.mini.standardWindowButton(.zoomButton)?.isHidden)) customHidden=\(self.chromeView.isHidden)")
+            let hasEntered = {
+                self.fullScreenPhase == .fullScreen && self.mini.styleMask.contains(.fullScreen)
+            }
+            waitForWindowTest("enter fullscreen", until: hasEntered) {
+                print(
+                    "WINDOW_ENTER_STATE frame=\(self.mini.frame) closeHidden=\(String(describing:self.mini.standardWindowButton(.closeButton)?.isHidden)) zoomHidden=\(String(describing:self.mini.standardWindowButton(.zoomButton)?.isHidden)) customHidden=\(self.chromeView.isHidden)"
+                )
                 fflush(stdout)
                 precondition(self.mini.standardWindowButton(.closeButton)?.isHidden == false)
                 precondition(self.mini.standardWindowButton(.zoomButton)?.isHidden == false)
                 precondition(self.chromeView.isHidden)
                 precondition(self.cardShadowWindow?.isVisible != true && self.cardShadowWindow?.parent == nil)
                 let fullscreenFrame = self.mini.frame
-                self.setCompact(true); self.toggleQueue(); self.closeQueueOverlay(); self.setCompact(false)
-                print("WINDOW_MODE_STATE before=\(fullscreenFrame) after=\(self.mini.frame) phase=\(self.fullScreenPhase)")
+                self.setCompact(true)
+                self.toggleQueue()
+                self.closeQueueOverlay()
+                self.setCompact(false)
+                print(
+                    "WINDOW_MODE_STATE before=\(fullscreenFrame) after=\(self.mini.frame) phase=\(self.fullScreenPhase)"
+                )
                 fflush(stdout)
                 precondition(self.mini.frame == fullscreenFrame)
                 precondition(self.chromeView.window === self.mini)
                 print("WINDOW_FULLSCREEN_OK: native buttons; compact and queue keep system frame")
                 fflush(stdout)
                 self.minimizePlayer()
-                self.waitForWindowTest("exit and minimize", until: { self.fullScreenPhase == .windowed && self.mini.isMiniaturized }) {
+                self.waitForWindowTest(
+                    "exit and minimize",
+                    until: { self.fullScreenPhase == .windowed && self.mini.isMiniaturized }
+                ) {
                     precondition(!self.mini.styleMask.contains(.fullScreen))
                     precondition(self.cardShadowWindow?.isVisible != true)
                     self.mini.deminiaturize(nil)
                     print("WINDOW_MINIMIZE_OK: exited fullscreen before minimizing")
                     fflush(stdout)
                     self.toggleNativeFullScreen()
-                    self.waitForWindowTest("reenter fullscreen", until: { self.fullScreenPhase == .fullScreen }) {
+                    self.waitForWindowTest(
+                        "reenter fullscreen", until: { self.fullScreenPhase == .fullScreen }
+                    ) {
                         self.closePlayer()
-                        self.waitForWindowTest("exit before close", until: { self.fullScreenPhase == .windowed && !self.mini.isVisible }) {
+                        self.waitForWindowTest(
+                            "exit before close",
+                            until: { self.fullScreenPhase == .windowed && !self.mini.isVisible }
+                        ) {
                             precondition(!self.mini.styleMask.contains(.fullScreen))
-                            precondition(self.cardShadowWindow?.isVisible != true && self.cardShadowWindow?.parent == nil)
-                            print("WINDOW_TEST_OK: reenter, exit before hiding; no fullscreen space left behind")
-                            fflush(stdout); NSApp.terminate(nil)
+                            precondition(
+                                self.cardShadowWindow?.isVisible != true
+                                    && self.cardShadowWindow?.parent == nil)
+                            print(
+                                "WINDOW_TEST_OK: reenter, exit before hiding; no fullscreen space left behind"
+                            )
+                            fflush(stdout)
+                            NSApp.terminate(nil)
                         }
                     }
                 }
             }
         }
-        var enlarged = baseline
-        enlarged.size.height += 80; enlarged.origin.y -= 80
-        animateQueueChange(to: enlarged, showing: playerContainer, frozen: snapshotOverlay())
-        waitForWindowTest("size animation", until: { !self.windowTransition }) {
-            precondition(abs(self.mini.frame.height - enlarged.height) < 1)
-            print("WINDOW_ANIMATION_OK: animated resize completed")
-            fflush(stdout)
-            self.animateQueueChange(to: baseline, showing: self.playerContainer, frozen: self.snapshotOverlay())
-            checkFullscreen()
+        let checkMotion = { [self] in
+            mini.setFrame(baseline, display: true)
+            positionChrome()
+            var enlarged = baseline
+            enlarged.size.height += 80
+            enlarged.origin.y -= 80
+            animateQueueChange(to: enlarged, showing: playerContainer, frozen: snapshotOverlay())
+            let animationFinished = { !self.windowTransition }
+            waitForWindowTest("size animation", until: animationFinished) {
+                precondition(abs(self.mini.frame.height - enlarged.height) < 1)
+                print("WINDOW_ANIMATION_OK: animated resize completed")
+                fflush(stdout)
+                self.animateQueueChange(
+                    to: baseline, showing: self.playerContainer, frozen: self.snapshotOverlay())
+                checkFullscreen()
+            }
         }
+        checkShadowEdgeAlignment(completion: checkMotion)
     }
 
     @objc func inspectPlayer(_ notification: Notification) {
@@ -306,8 +484,15 @@ extension MusicApp {
             if action == "queue" { toggleQueue() }
             if action == "compact" { toggleCompact() }
             if action == "back" { closeQueueOverlay() }
-            if action == "tall" { var f=mini.frame; f.origin.y -= 300; f.size.height += 300; mini.setFrame(f, display:true) }
-            if let output = notification.userInfo?["preview"] as? String { DispatchQueue.main.asyncAfter(deadline:.now()+1) { self.savePreview(output) } }
+            if action == "tall" {
+                var f = mini.frame
+                f.origin.y -= 300
+                f.size.height += 300
+                mini.setFrame(f, display: true)
+            }
+            if let output = notification.userInfo?["preview"] as? String {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.savePreview(output) }
+            }
             return
         }
         if notification.userInfo?["queue"] as? Bool == true {
@@ -317,14 +502,21 @@ extension MusicApp {
         if let source = notification.userInfo?["source"] as? String, ["wave", "likes"].contains(source) {
             command(source)
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { self.reportLivePage() }
-        } else { reportLivePage() }
+        } else {
+            reportLivePage()
+        }
     }
     func inspectQueue(output: String?) {
-        guard let url = Bundle.main.url(forResource: "queue-inspect", withExtension: "js"), let script = try? String(contentsOf: url, encoding: .utf8) else { return }
+        guard let url = Bundle.main.url(forResource: "queue-inspect", withExtension: "js"),
+            let script = try? String(contentsOf: url, encoding: .utf8)
+        else { return }
         web.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
             switch result {
             case .success(let value):
-                guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]) else { return }
+                guard
+                    let data = try? JSONSerialization.data(
+                        withJSONObject: value, options: [.prettyPrinted, .sortedKeys])
+                else { return }
                 if let output { try? data.write(to: URL(fileURLWithPath: output)) }
                 print("QUEUE_INSPECTION: \(data.count) bytes")
             case .failure(let error): print("QUEUE_INSPECTION_FAILED: \(error.localizedDescription)")
@@ -333,9 +525,13 @@ extension MusicApp {
         }
     }
     func reportLivePage() {
-        web.evaluateJavaScript("JSON.stringify({bridge:!!window.__moyaMusic,title:document.title,head:document.body.innerText.slice(0,1000),path:location.pathname,pending:sessionStorage.getItem('moyaPending'),player:window.__moyaMusic?.state(),buttons:[...document.querySelectorAll('button,[role=button]')].map(b=>({id:b.dataset.testId,label:b.getAttribute('aria-label'),title:b.title,pressed:b.getAttribute('aria-pressed'),disabled:b.disabled,cls:b.className,parent:b.parentElement?.className})).slice(-45),links:[...document.querySelectorAll('a[href]')].filter(a=>/shelf|liked|collection|playlist/.test(a.getAttribute('href'))).map(a=>({href:a.getAttribute('href'),text:a.textContent.slice(0,40)})).slice(0,15),sliders:[...document.querySelectorAll('[role=slider],input[type=range]')].map(b=>({role:b.getAttribute('role'),label:b.getAttribute('aria-label'),now:b.getAttribute('aria-valuenow'),max:b.getAttribute('aria-valuemax')}))})") { result, error in
+        web.evaluateJavaScript(
+            "JSON.stringify({bridge:!!window.__moyaMusic,title:document.title,head:document.body.innerText.slice(0,1000),path:location.pathname,pending:sessionStorage.getItem('moyaPending'),player:window.__moyaMusic?.state(),buttons:[...document.querySelectorAll('button,[role=button]')].map(b=>({id:b.dataset.testId,label:b.getAttribute('aria-label'),title:b.title,pressed:b.getAttribute('aria-pressed'),disabled:b.disabled,cls:b.className,parent:b.parentElement?.className})).slice(-45),links:[...document.querySelectorAll('a[href]')].filter(a=>/shelf|liked|collection|playlist/.test(a.getAttribute('href'))).map(a=>({href:a.getAttribute('href'),text:a.textContent.slice(0,40)})).slice(0,15),sliders:[...document.querySelectorAll('[role=slider],input[type=range]')].map(b=>({role:b.getAttribute('role'),label:b.getAttribute('aria-label'),now:b.getAttribute('aria-valuenow'),max:b.getAttribute('aria-valuemax')}))})"
+        ) { result, error in
             print("LIVE_PAGE: \(result ?? String(describing: error))")
-            print("UI: compact=\(self.compact), size=\(self.mini.frame.size), ambient=\(self.ambientSpin.contents != nil)")
+            print(
+                "UI: compact=\(self.compact), size=\(self.mini.frame.size), ambient=\(self.ambientSpin.contents != nil)"
+            )
             fflush(stdout)
         }
     }

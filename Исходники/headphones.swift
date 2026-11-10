@@ -4,16 +4,24 @@ import CoreAudio
 let appIdentifier = "ru.ninesquares.moyamusic"
 let appURL = URL(fileURLWithPath: "/Applications/Моя музыка.app")
 
-func address(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
+func address(
+    _ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+) -> AudioObjectPropertyAddress {
     AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
 }
-func number(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> UInt32? {
-    var key = address(selector, scope: scope), value: UInt32 = 0, size = UInt32(MemoryLayout<UInt32>.size)
+func number(
+    _ object: AudioObjectID, _ selector: AudioObjectPropertySelector,
+    scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+) -> UInt32? {
+    var key = address(selector, scope: scope)
+    var value: UInt32 = 0
+    var size = UInt32(MemoryLayout<UInt32>.size)
     guard AudioObjectGetPropertyData(object, &key, 0, nil, &size, &value) == noErr else { return nil }
     return value
 }
 func string(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String {
-    var key = address(selector), value: Unmanaged<CFString>?
+    var key = address(selector)
+    var value: Unmanaged<CFString>?
     var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
     let status = withUnsafeMutablePointer(to: &value) { pointer in
         AudioObjectGetPropertyData(object, &key, 0, nil, &size, UnsafeMutableRawPointer(pointer))
@@ -21,25 +29,38 @@ func string(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) ->
     guard status == noErr, let value else { return "" }
     return value.takeRetainedValue() as String
 }
-func objects(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> [AudioObjectID] {
-    var key = address(selector, scope: scope), size: UInt32 = 0
+func objects(
+    _ object: AudioObjectID, _ selector: AudioObjectPropertySelector,
+    scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+) -> [AudioObjectID] {
+    var key = address(selector, scope: scope)
+    var size: UInt32 = 0
     guard AudioObjectGetPropertyDataSize(object, &key, 0, nil, &size) == noErr, size > 0 else { return [] }
     var values = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
-    let status = values.withUnsafeMutableBytes { bytes in AudioObjectGetPropertyData(object, &key, 0, nil, &size, bytes.baseAddress!) }
+    let status = values.withUnsafeMutableBytes { bytes in
+        AudioObjectGetPropertyData(object, &key, 0, nil, &size, bytes.baseAddress!)
+    }
     return status == noErr ? values : []
 }
 func connectedHeadphones() -> [String: String] {
-    var found: [String:String] = [:]
+    var found: [String: String] = [:]
     for device in objects(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDevices) {
         guard number(device, kAudioDevicePropertyDeviceIsAlive) == 1 else { continue }
         let streams = objects(device, kAudioDevicePropertyStreams, scope: kAudioObjectPropertyScopeOutput)
         guard !streams.isEmpty else { continue }
         let name = string(device, kAudioObjectPropertyName)
-        let terminalIsHeadphones = streams.contains { number($0, kAudioStreamPropertyTerminalType) == kAudioStreamTerminalTypeHeadphones }
-        let source = number(device, kAudioDevicePropertyDataSource, scope: kAudioObjectPropertyScopeOutput) ?? 0
-        let isHeadphoneJack = source == 0x6864706e || source == 0x68647068
-        let knownHeadphones = name.range(of: "airpods|headphones?|headset|наушник|beats|wh-1000|wf-1000|quietcomfort|qc35|qc45|buds", options: [.regularExpression, .caseInsensitive]) != nil
-        let isMicrophone = name.range(of: "microphone|микрофон", options: [.regularExpression, .caseInsensitive]) != nil
+        let terminalIsHeadphones = streams.contains {
+            number($0, kAudioStreamPropertyTerminalType) == kAudioStreamTerminalTypeHeadphones
+        }
+        let source =
+            number(device, kAudioDevicePropertyDataSource, scope: kAudioObjectPropertyScopeOutput) ?? 0
+        let isHeadphoneJack = source == 0x6864_706e || source == 0x6864_7068
+        let knownHeadphones =
+            name.range(
+                of: "airpods|headphones?|headset|наушник|beats|wh-1000|wf-1000|quietcomfort|qc35|qc45|buds",
+                options: [.regularExpression, .caseInsensitive]) != nil
+        let isMicrophone =
+            name.range(of: "microphone|микрофон", options: [.regularExpression, .caseInsensitive]) != nil
         guard (terminalIsHeadphones && !isMicrophone) || isHeadphoneJack || knownHeadphones else { continue }
         let uid = string(device, kAudioDevicePropertyDeviceUID)
         found["\(uid.isEmpty ? String(device) : uid):\(source)"] = name
@@ -47,23 +68,30 @@ func connectedHeadphones() -> [String: String] {
     return found
 }
 func openPlayer() {
-    let runningPlayer = NSRunningApplication.runningApplications(withBundleIdentifier: appIdentifier).contains {
+    let runningPlayer = NSRunningApplication.runningApplications(withBundleIdentifier: appIdentifier).contains
+    {
         !$0.isTerminated && $0.executableURL?.lastPathComponent == "MoyaMusic"
     }
     if runningPlayer {
-        DistributedNotificationCenter.default().postNotificationName(Notification.Name("ru.ninesquares.moyamusic.headphones"), object: nil, userInfo: nil, deliverImmediately: true)
+        DistributedNotificationCenter.default().postNotificationName(
+            Notification.Name("ru.ninesquares.moyamusic.headphones"), object: nil, userInfo: nil,
+            deliverImmediately: true)
         return
     }
     let launcher = Process()
     launcher.executableURL = URL(fileURLWithPath: "/usr/bin/open")
     launcher.arguments = [appURL.path]
     do {
-        try launcher.run(); launcher.waitUntilExit()
-        print(launcher.terminationStatus == 0 ? "Opened player after headphones connection" : "Could not open player")
+        try launcher.run()
+        launcher.waitUntilExit()
+        print(
+            launcher.terminationStatus == 0
+                ? "Opened player after headphones connection" : "Could not open player")
         fflush(stdout)
         if CommandLine.arguments.contains("--simulate-connection") { exit(launcher.terminationStatus) }
     } catch {
-        print("Could not open player: \(error.localizedDescription)"); fflush(stdout)
+        print("Could not open player: \(error.localizedDescription)")
+        fflush(stdout)
         if CommandLine.arguments.contains("--simulate-connection") { exit(1) }
     }
 
@@ -95,7 +123,8 @@ func checkConnections() {
 }
 for selector in [kAudioHardwarePropertyDevices, kAudioHardwarePropertyDefaultOutputDevice] {
     var key = address(selector)
-    AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &key, DispatchQueue.main) { _, _ in
+    AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &key, DispatchQueue.main) {
+        _, _ in
         guard !checkScheduled else { return }
         checkScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
