@@ -81,11 +81,13 @@ extension MusicApp {
                 self.setArtworkImage(image,animated:false); self.setAmbient(self.makeAmbient(data))
             }
             self.setCompact(true)
+            self.settingsButton.hoverAmount = 1
             self.mini.contentView?.layoutSubtreeIfNeeded()
             precondition(self.mini.frame.height <= 253, "Hidden settings must not enlarge the mini player")
             if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] {
                 self.savePreview(URL(fileURLWithPath: path).deletingPathExtension().path + "-compact.png")
             }
+            self.settingsButton.hoverAmount = 0
             self.setCompact(false)
             self.mini.contentView?.layoutSubtreeIfNeeded()
             if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { self.savePreview(path) }

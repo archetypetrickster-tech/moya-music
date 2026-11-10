@@ -272,7 +272,9 @@ class HoverButton: NSButton {
 final class IconButton: HoverButton {
     override func draw(_ dirtyRect: NSRect) {
         NSColor.white.withAlphaComponent(hoverAmount * 0.09 + pressAmount * 0.07 + selectionAmount * 0.04).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 11, yRadius: 11).fill()
+        let side = min(bounds.width,bounds.height)
+        let square = NSRect(x:bounds.midX-side/2,y:bounds.midY-side/2,width:side,height:side)
+        NSBezierPath(roundedRect:square,xRadius:11,yRadius:11).fill()
         guard let image else { return }
         let size = image.size.width - pressAmount * 1.5
         IconLibrary.draw(image, in: NSRect(x: bounds.midX - size / 2, y: bounds.midY - size / 2, width: size, height: size), color: foreground)
@@ -542,10 +544,13 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         pinButton = iconButton("pushpin","Поверх окон",#selector(togglePin),16, 32)
         pinButton.selected = alwaysOnTop
         pinButton.image = IconLibrary.image(alwaysOnTop ? "pushpin-filled":"pushpin",size:16)
-        let shield = NSImage(systemSymbolName:"gearshape",accessibilityDescription:nil)!
-        shield.size = NSSize(width:16,height:16)
+        let symbol = NSImage(systemSymbolName:"gearshape",accessibilityDescription:nil)!
+        let shield = NSImage(size:NSSize(width:16,height:16),flipped:false) { rect in
+            symbol.draw(in:rect); return true
+        }
+        shield.isTemplate = true
         settingsButton = IconButton(image:shield,target:self,action:#selector(showConnectionSettings))
-        settingsButton.isBordered = false; settingsButton.translatesAutoresizingMaskIntoConstraints = false
+        settingsButton.isBordered = false; settingsButton.bezelStyle = .regularSquare; settingsButton.focusRingType = .none; settingsButton.translatesAutoresizingMaskIntoConstraints = false
         settingsButton.widthAnchor.constraint(equalToConstant:32).isActive = true; settingsButton.heightAnchor.constraint(equalToConstant:32).isActive = true
         settingsButton.setAccessibilityLabel("Настройки")
         let proxyMenu = NSMenu()
