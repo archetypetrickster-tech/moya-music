@@ -1,6 +1,6 @@
 import AppKit
 
-// A transparent part of the main window hosts the floating controls. No extra window or Space is created.
+// Controls stay in the main window. A noninteractive child below it paints only the card shadow.
 private final class CardShadowView: NSView {
     var cardFrame = NSRect.zero
     var radius: CGFloat = 14
@@ -23,23 +23,12 @@ private final class CardShadowView: NSView {
     }
 }
 
+private final class CardShadowPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
 final class ChromeHostView: NSView {
-    static let shadowMargin: CGFloat = 24
-    private let cardShadow = CardShadowView()
-    override init(frame frameRect: NSRect) {
-        super.init(frame:frameRect)
-        addSubview(cardShadow)
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:)") }
-    // The shadow has a fixed card silhouette; fading traffic lights never enter its path.
-    func updateCardShadow(frame: NSRect, radius: CGFloat, visible: Bool) {
-        cardShadow.isHidden = !visible
-        if cardShadow.frame != bounds { cardShadow.frame = bounds }
-        if cardShadow.cardFrame != frame || cardShadow.radius != radius {
-            cardShadow.cardFrame = frame; cardShadow.radius = radius
-            cardShadow.needsDisplay = true
-        }
-    }
     var onTopHover: ((Bool) -> Void)?
     var onLayout: (() -> Void)?
     private var tracking: NSTrackingArea?
@@ -107,11 +96,9 @@ extension MusicApp {
         return gridWidth && gridHeight
     }
     var preservesSystemFrame: Bool {
-        usesSystemPlacementFrame || mini.frame.width > 660 + 2 * ChromeHostView.shadowMargin
+        usesSystemPlacementFrame || mini.frame.width > 660
     }
-    var cardShadowMargin: CGFloat { usesSystemPlacementFrame ? 0 : ChromeHostView.shadowMargin }
-    var windowCardWidth: CGFloat { max(340, mini.frame.width - 2 * cardShadowMargin) }
-    var windowTopReserve: CGFloat { chromeGutter + chromeInset + cardShadowMargin }
+    var windowTopReserve: CGFloat { chromeGutter + chromeInset }
     var floatsChromeAboveCard: Bool {
         guard !usesSystemPlacementFrame, let area = mini.screen?.visibleFrame else { return false }
         let frame = mini.frame
@@ -168,18 +155,48 @@ extension MusicApp {
         let gutter: CGFloat = floatsChromeAboveCard ? 30 : 0
         let inset: CGFloat = gutter > 0 ? 0 : (usesNativeWindowControls ? max(30, host.safeAreaInsets.top) : 30)
         chromeGutter = gutter
-        let margin = cardShadowMargin
-        let frame = NSRect(x:margin,y:margin,width:max(1,host.bounds.width-2*margin),height:max(1,host.bounds.height-gutter-margin))
+        let frame = NSRect(x:0,y:0,width:host.bounds.width,height:max(1,host.bounds.height-gutter))
         if surface.frame != frame { surface.frame = frame }
         chromeInset = inset
         if playerTop.constant != inset { playerTop.constant = inset }
         if queueTop?.constant != 16 + inset { queueTop?.constant = 16 + inset }
         updateCardShadow()
     }
+    func hideCardShadow() {
+        guard let shadow = cardShadowWindow else { return }
+        shadow.orderOut(nil)
+        shadow.parent?.removeChildWindow(shadow)
+    }
     func updateCardShadow() {
-        guard let host = mini?.contentView as? ChromeHostView, let surface else { return }
-        let radius = surface.layer?.cornerRadius ?? 14
-        host.updateCardShadow(frame:surface.frame, radius:radius, visible:cardShadowMargin > 0 && !usesNativeWindowControls)
+        guard let mini, let surface, mini.isVisible, !mini.isMiniaturized,
+              !cardShadowSuspended, !usesSystemPlacementFrame else { hideCardShadow(); return }
+        let margin: CGFloat = 24
+        let card = mini.convertToScreen(surface.convert(surface.bounds,to:nil))
+        let frame = card.insetBy(dx:-margin,dy:-margin)
+        let shadow: NSPanel
+        if let existing = cardShadowWindow { shadow = existing }
+        else {
+            shadow = CardShadowPanel(contentRect:frame,styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
+            shadow.isOpaque = false; shadow.backgroundColor = .clear; shadow.hasShadow = false
+            shadow.ignoresMouseEvents = true; shadow.hidesOnDeactivate = false
+            shadow.isFloatingPanel = false; shadow.isReleasedWhenClosed = false
+            shadow.isExcludedFromWindowsMenu = true; shadow.animationBehavior = .none
+            shadow.collectionBehavior = [.transient,.ignoresCycle,.fullScreenAuxiliary]
+            shadow.tabbingMode = .disallowed
+            shadow.contentView = CardShadowView(frame:NSRect(origin:.zero,size:frame.size))
+            cardShadowWindow = shadow
+        }
+        if shadow.frame != frame { shadow.setFrame(frame,display:false) }
+        if let view = shadow.contentView as? CardShadowView {
+            let shape = NSRect(x:margin,y:margin,width:card.width,height:card.height)
+            let radius = surface.layer?.cornerRadius ?? 14
+            if view.cardFrame != shape || view.radius != radius {
+                view.cardFrame = shape; view.radius = radius; view.needsDisplay = true
+            }
+        }
+        shadow.level = mini.level
+        if shadow.parent !== mini { mini.addChildWindow(shadow,ordered:.below) }
+        if !shadow.isVisible { shadow.order(.below,relativeTo:mini.windowNumber) }
     }
     func positionChrome() {
         guard let host = mini?.contentView, surface != nil else { return }
@@ -243,7 +260,7 @@ extension MusicApp {
         }
     }
     func hidePlayerWindow() {
-        setChromeVisible(false); mini.orderOut(nil)
+        hideCardShadow(); setChromeVisible(false); mini.orderOut(nil)
         queueWatching = false
         web.evaluateJavaScript("window.__moyaQueue?.watch(false); null", completionHandler: nil)
     }
@@ -291,6 +308,12 @@ extension MusicApp {
         guard window === mini else { return }
         fullScreenPhase = .fullScreen; pendingWindowAction = nil
         updateWindowControls()
+    }
+    func windowWillMiniaturize(_ notification: Notification) {
+        if notification.object as? NSWindow === mini { cardShadowSuspended = true; hideCardShadow() }
+    }
+    func windowDidDeminiaturize(_ notification: Notification) {
+        if notification.object as? NSWindow === mini { cardShadowSuspended = false; updateCardShadow() }
     }
     func windowDidBecomeKey(_ notification: Notification) {
         if notification.object as? NSWindow === mini { reconcileWindowState(); refreshChromeColors(); updateWindowControls() }

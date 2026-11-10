@@ -331,6 +331,8 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     var surface: PlayerSurface!
     var chromeGutter: CGFloat = 30
     var chromeView: ChromeHoverView!
+    var cardShadowWindow: NSPanel?
+    var cardShadowSuspended = false
     var fullScreenPhase = FullScreenPhase.windowed
     var pendingWindowAction: PendingWindowAction?
     let frameAnimator = PlayerFrameAnimator()
@@ -388,6 +390,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         }
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(headphonesConnected(_:)), name: Notification.Name("ru.ninesquares.moyamusic.headphones"), object: nil)
         mini.makeKeyAndOrderFront(nil)
+        updateCardShadow()
         NSApp.activate(ignoringOtherApps: true)
         if selfTest { runSelfTest(); return }
         web.load(URLRequest(url: URL(string: "https://music.yandex.ru/")!))
@@ -461,13 +464,13 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     }
 
     func setupMini() {
-        mini = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 388, height: 622), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        mini = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 340, height: 540), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         mini.title = "Моя музыка"; mini.titleVisibility = .hidden
         mini.titlebarAppearsTransparent = true; mini.isMovableByWindowBackground = true
         mini.titlebarSeparatorStyle = .none
         mini.acceptsMouseMovedEvents = true
         mini.isOpaque = false; mini.backgroundColor = .clear; mini.hasShadow = false
-        mini.minSize = NSSize(width: 388, height: 622)
+        mini.minSize = NSSize(width: 340, height: 598)
         mini.minFullScreenContentSize = NSSize(width: 340, height: 598)
         mini.collectionBehavior = [.fullScreenPrimary, .fullScreenAllowsTiling]
         mini.tabbingMode = .disallowed
@@ -477,7 +480,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         host.wantsLayer = true; host.layer?.backgroundColor = NSColor.clear.cgColor
         host.onTopHover = { [weak self] visible in self?.revealChrome(visible) }
         host.onLayout = { [weak self] in self?.positionChrome() }
-        let root = PlayerSurface(frame: NSRect(x:24,y:24,width:host.bounds.width-48,height:max(1,host.bounds.height-54)))
+        let root = PlayerSurface(frame: NSRect(x:0,y:0,width:host.bounds.width,height:max(1,host.bounds.height-30)))
         surface = root
         root.autoresizingMask = [.width,.height]
         root.wantsLayer = true; root.layer?.masksToBounds = true
@@ -607,7 +610,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         ])
         setupQueuePanels(root: root)
         var initialFrame = mini.frame
-        initialFrame.size = NSSize(width: 388, height: 622)
+        initialFrame.size = NSSize(width: 340, height: 598)
         mini.setFrame(initialFrame, display: false)
         mini.center()
         setupWindowChrome()
@@ -642,7 +645,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         if !mini.isVisible { showMini() }
     }
     @objc func showLibrary() { library.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
-    @objc func showMini() { mini.makeKeyAndOrderFront(nil); layoutQueueRegion(); NSApp.activate(ignoringOtherApps: true) }
+    @objc func showMini() { mini.makeKeyAndOrderFront(nil); layoutQueueRegion(); updateCardShadow(); NSApp.activate(ignoringOtherApps: true) }
     @objc func reload() { web.reload() }
     @objc func sourceSwitchChanged(_ sender: SourceSwitch) {
         let source = sender.selectedSegment == 0 ? "wave" : "likes"
@@ -671,10 +674,10 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         artworkContainer.isHidden = enabled; timeRow.isHidden = enabled
         if enabled { compactPlayerHeight.isActive = true } else { fullPlayerHeight.isActive = true }
         dockedQueue.isHidden = true; dockedQueueSuppressed = false
-        mini.minSize = NSSize(width:388,height:276)
+        mini.minSize = NSSize(width: 340, height: 252)
         var target = oldFrame
         if !preserveFrame {
-            let height: CGFloat = (enabled ? 222 : min(windowCardWidth, 660) + 228) + windowTopReserve
+            let height: CGFloat = (enabled ? 222 : min(target.width, 660) + 228) + windowTopReserve
             target.origin.y += target.height - height; target.size.height = height
         }
         compactButton.selected = enabled
@@ -702,7 +705,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     }
     func configureWindowLimits() {
         guard !fullScreenPhase.isTransitioning else { return }
-        mini.minSize = NSSize(width:388,height:(queueOverlay || !compact ? 568 : 222)+54)
+        mini.minSize = NSSize(width: 340, height: (queueOverlay || !compact ? 568 : 222) + 30)
     }
     func setupQueuePanels(root: NSView) {
         for panel in [overlayQueue,dockedQueue] {
@@ -732,10 +735,10 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         queueOverlay = true
         overlayQueue.prepare(docked: false); overlayQueue.showLoading()
         playerContainer.isHidden = true; dockedQueue.isHidden = true; overlayQueue.isHidden = false
-        mini.minSize = NSSize(width:388,height:246)
+        mini.minSize = NSSize(width: 340, height: 222)
         var frame = mini.frame
         if !preservesSystemFrame {
-            let height = max(frame.height, min(windowCardWidth, 660) + 228 + windowTopReserve)
+            let height = max(frame.height, min(frame.width, 660) + 228 + windowTopReserve)
             frame.origin.y += frame.height - height; frame.size.height = height
         }
         animateQueueChange(to: frame, showing: overlayQueue, frozen: frozen)
@@ -745,12 +748,12 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         guard queueOverlay && !windowTransition else { return }
         let frozen = queueTransitionSnapshot()
         queueOverlay = false; overlayQueue.isHidden = true; playerContainer.isHidden = false
-        mini.minSize = NSSize(width:388,height:246)
+        mini.minSize = NSSize(width: 340, height: 222)
         var frame = queueReturnFrame ?? mini.frame
         if preservesSystemFrame { frame = mini.frame }
         else {
             frame.origin.x = mini.frame.minX
-            let height = max(frame.height, (compact ? 222 : min(windowCardWidth, 660) + 228) + windowTopReserve)
+            let height = max(frame.height, (compact ? 222 : min(frame.width, 660) + 228) + windowTopReserve)
             frame.origin.y = mini.frame.maxY - height; frame.size.height = height
         }
         queueReturnFrame = nil
@@ -786,7 +789,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     func collapseDockedQueue() {
         if preservesSystemFrame { dockedQueueSuppressed = true; layoutQueueRegion(); return }
         var frame = mini.frame
-        let height = basePlayerHeight + chromeGutter + cardShadowMargin
+        let height = basePlayerHeight + chromeGutter
         frame.origin.y += frame.height - height; frame.size.height = height
         mini.setFrame(frame, display: true)
     }

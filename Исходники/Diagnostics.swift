@@ -122,7 +122,7 @@ extension MusicApp {
         let before = mini.frame
         toggleQueue(); applyQueue(sample)
         mini.contentView?.layoutSubtreeIfNeeded()
-        precondition(queueOverlay && mini.frame.height >= min(windowCardWidth, 660) + 228 + windowTopReserve)
+        precondition(queueOverlay && mini.frame.height >= min(mini.frame.width, 660) + 228 + windowTopReserve)
         if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-queue.png") }
         closeQueueOverlay()
         precondition(compact && abs(mini.frame.height - before.height) < 1)
@@ -197,12 +197,17 @@ extension MusicApp {
             precondition(chromeGutter == 0 && chromeInset >= 30)
             precondition(playerContainer.frame.width <= 660 && playerContainer.frame.width <= mini.contentView!.bounds.width)
         }
-        let baseline = NSRect(x: area.midX - 194, y: area.midY - 311, width: 388, height: 622)
+        let baseline = NSRect(x: area.midX - 170, y: area.midY - 299, width: 340, height: 598)
         mini.setFrame(baseline, display: true)
         positionChrome()
         precondition(chromeGutter == 30 && chromeInset == 0)
         precondition(chromeView.frame.minY >= surface.frame.maxY)
         precondition(chromeView.window === mini)
+        precondition(surface.frame.minX == 0 && surface.frame.minY == 0 && surface.frame.width == mini.contentView!.bounds.width)
+        precondition(cardShadowWindow?.parent === mini && cardShadowWindow?.isVisible == true)
+        precondition(cardShadowWindow?.ignoresMouseEvents == true && cardShadowWindow?.canBecomeKey == false)
+        precondition(cardShadowWindow?.collectionBehavior.contains(.transient) == true)
+        print("SHADOW_BOUNDS_OK: player frame fits card; separate shadow ignores input and Mission Control")
         print("WINDOW_GEOMETRY_OK: halves, corners, screen bounds; no resize feedback")
         fflush(stdout)
         let checkFullscreen = { [self] in
@@ -213,6 +218,7 @@ extension MusicApp {
                 precondition(self.mini.standardWindowButton(.closeButton)?.isHidden == false)
                 precondition(self.mini.standardWindowButton(.zoomButton)?.isHidden == false)
                 precondition(self.chromeView.isHidden)
+                precondition(self.cardShadowWindow?.isVisible != true && self.cardShadowWindow?.parent == nil)
                 let fullscreenFrame = self.mini.frame
                 self.setCompact(true); self.toggleQueue(); self.closeQueueOverlay(); self.setCompact(false)
                 print("WINDOW_MODE_STATE before=\(fullscreenFrame) after=\(self.mini.frame) phase=\(self.fullScreenPhase)")
@@ -224,6 +230,7 @@ extension MusicApp {
                 self.minimizePlayer()
                 self.waitForWindowTest("exit and minimize", until: { self.fullScreenPhase == .windowed && self.mini.isMiniaturized }) {
                     precondition(!self.mini.styleMask.contains(.fullScreen))
+                    precondition(self.cardShadowWindow?.isVisible != true)
                     self.mini.deminiaturize(nil)
                     print("WINDOW_MINIMIZE_OK: exited fullscreen before minimizing")
                     fflush(stdout)
@@ -232,6 +239,7 @@ extension MusicApp {
                         self.closePlayer()
                         self.waitForWindowTest("exit before close", until: { self.fullScreenPhase == .windowed && !self.mini.isVisible }) {
                             precondition(!self.mini.styleMask.contains(.fullScreen))
+                            precondition(self.cardShadowWindow?.isVisible != true && self.cardShadowWindow?.parent == nil)
                             print("WINDOW_TEST_OK: reenter, exit before hiding; no fullscreen space left behind")
                             fflush(stdout); NSApp.terminate(nil)
                         }
