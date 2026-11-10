@@ -1,11 +1,14 @@
 import AppKit
 import CoreImage
 import QuartzCore
+import Sparkle
 import WebKit
 
 final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate,
     WKScriptMessageHandler
 {
+    var updateStateObserver: NSKeyValueObservation?
+    var updaterController: SPUStandardUpdaterController?
     var web: WKWebView!
     var library: NSWindow!
     var mini: NSWindow!
@@ -116,6 +119,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             runSelfTest()
             return
         }
+        setupUpdates()
         web.load(URLRequest(url: URL(string: "https://music.yandex.ru/")!))
         if liveTest || !UserDefaults.standard.bool(forKey: "hasPlayed") { showLibrary() }
         if liveTest {
@@ -148,6 +152,9 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             .target = self
         appMenu.addItem(withTitle: "Показать плеер", action: #selector(showMini), keyEquivalent: "1").target =
             self
+        appMenu.addItem(
+            withTitle: "Проверить обновления…", action: #selector(checkForUpdates(_:)), keyEquivalent: ""
+        ).target = self
         appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: "Скрыть Мою музыку", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")

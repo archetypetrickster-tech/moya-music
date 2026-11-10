@@ -10,15 +10,21 @@ cleanup() {
     rm -rf "$build_work"
 }
 trap cleanup EXIT
+source ./sparkle.sh
+prepare_sparkle "$build_work/sparkle"
 APP="$build_work/Моя музыка.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 for build_arch in arm64 x86_64; do
-    xcrun swiftc main.swift PlayerControls.swift PlayerPresentation.swift ServicePolicy.swift QueueView.swift Diagnostics.swift WindowBehavior.swift SourceSwitch.swift ConnectionSettings.swift -O -target "$build_arch-apple-macosx13.0" -framework AppKit -framework WebKit -framework Network -framework Security -o "$build_work/MoyaMusic-$build_arch"
+    xcrun swiftc main.swift PlayerControls.swift PlayerPresentation.swift ServicePolicy.swift QueueView.swift Diagnostics.swift WindowBehavior.swift SourceSwitch.swift ConnectionSettings.swift Updates.swift -F "$build_work/sparkle" -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks -O -target "$build_arch-apple-macosx13.0" -framework AppKit -framework WebKit -framework Network -framework Security -o "$build_work/MoyaMusic-$build_arch"
     xcrun swiftc headphones.swift -O -target "$build_arch-apple-macosx13.0" -framework AppKit -framework CoreAudio -o "$build_work/Headphones-$build_arch"
 done
 xcrun lipo -create "$build_work/MoyaMusic-arm64" "$build_work/MoyaMusic-x86_64" -output "$APP/Contents/MacOS/MoyaMusic"
 xcrun lipo -create "$build_work/Headphones-arm64" "$build_work/Headphones-x86_64" -output "$APP/Contents/Helpers/MoyaMusicHeadphones"
 codesign --force --sign - "$APP/Contents/Helpers/MoyaMusicHeadphones"
+mkdir -p "$APP/Contents/Frameworks"
+/usr/bin/ditto "$build_work/sparkle/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+codesign --force --sign - "$APP/Contents/Frameworks/Sparkle.framework"
+cp "$build_work/sparkle/LICENSE" "$APP/Contents/Resources/Sparkle-LICENSE.txt"
 cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp bridge.js "$APP/Contents/Resources/bridge.js"
 cp queue-inspect.js "$APP/Contents/Resources/queue-inspect.js"
@@ -34,11 +40,20 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundleName</key><string>Моя музыка</string>
 <key>CFBundleDisplayName</key><string>Моя музыка</string>
-<key>CFBundleVersion</key><string>805</string>
-<key>CFBundleShortVersionString</key><string>0.8.5</string>
+<key>CFBundleVersion</key><string>900</string>
+<key>CFBundleShortVersionString</key><string>0.9.0</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>SUFeedURL</key><string>https://archetypetrickster-tech.github.io/my-music/appcast.xml</string>
+<key>SUPublicEDKey</key><string>aW42xoqtWP/vZxxopCbkJKZmF/Z1JxP9Ay5aL1Jmg/g=</string>
+<key>SUEnableAutomaticChecks</key><true/>
+<key>SUAutomaticallyUpdate</key><false/>
+<key>SUAllowsAutomaticUpdates</key><false/>
+<key>SUEnableSystemProfiling</key><false/>
+<key>SUVerifyUpdateBeforeExtraction</key><true/>
+<key>SURequireSignedFeed</key><true/>
+<key>SUSignedFeedFailureExpirationInterval</key><integer>0</integer>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>
 PLIST

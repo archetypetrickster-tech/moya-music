@@ -133,6 +133,12 @@ private final class ProxyChoice: HoverButton {
 }
 
 final class ConnectionPanel: NSView {
+    var onCheckForUpdates: (() -> Void)?
+    var onAutomaticUpdatesChanged: ((Bool) -> Void)?
+    private let automaticUpdates = NSButton(
+        checkboxWithTitle: "Проверять обновления автоматически", target: nil, action: nil)
+    private let checkUpdates = NSButton(title: "Проверить обновления…", target: nil, action: nil)
+    private let footer = NSStackView()
     var onBack: (() -> Void)?
     var onSave: ((ConnectionSettings, String) -> String?)?
     private let startup = NSButton(checkboxWithTitle: "Запускать виджет при входе", target: nil, action: nil)
@@ -243,7 +249,13 @@ final class ConnectionPanel: NSView {
         )
         quiet.font = .systemFont(ofSize: 12)
         quiet.textColor = .secondaryLabelColor
-        basic = NSStackView(views: [startup, autoplay, proxyLink, quiet])
+        automaticUpdates.target = self
+        automaticUpdates.action = #selector(changeAutomaticUpdates)
+        checkUpdates.target = self
+        checkUpdates.action = #selector(checkForUpdates)
+        checkUpdates.isBordered = false
+        checkUpdates.alignment = .left
+        basic = NSStackView(views: [startup, autoplay, proxyLink, quiet, automaticUpdates, checkUpdates])
         basic.orientation = .vertical
         basic.alignment = .leading
         basic.spacing = 18
@@ -286,7 +298,28 @@ final class ConnectionPanel: NSView {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        let fit = stack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor)
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let versionLabel = NSTextField(labelWithString: "Версия \(version)")
+        versionLabel.font = .systemFont(ofSize: 11)
+        versionLabel.textColor = .secondaryLabelColor
+        let github = NSButton(title: "GitHub ↗", target: self, action: #selector(openGitHub))
+        github.isBordered = false
+        github.font = .systemFont(ofSize: 11)
+        github.contentTintColor = .secondaryLabelColor
+        github.toolTip = "Исходники, новые версии и обратная связь"
+        footer.orientation = .horizontal
+        footer.alignment = .centerY
+        footer.addArrangedSubview(versionLabel)
+        footer.addArrangedSubview(NSView())
+        footer.addArrangedSubview(github)
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(footer)
+        NSLayoutConstraint.activate([
+            footer.leadingAnchor.constraint(equalTo: leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: trailingAnchor),
+            footer.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        let fit = stack.bottomAnchor.constraint(lessThanOrEqualTo: footer.topAnchor, constant: -16)
         fit.priority = .defaultLow
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: topAnchor),
@@ -367,11 +400,24 @@ final class ConnectionPanel: NSView {
             fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             layer?.add(fade, forKey: "settingsPageFade")
         }
+        footer.isHidden = show
         proxyPage = show
         basic.isHidden = show
         proxyForm.isHidden = !show
         heading.stringValue = show ? "Прокси" : "Настройки"
         back.title = show ? "‹ Настройки" : "‹ Плеер"
+    }
+    func setUpdateState(automatic: Bool, available: Bool) {
+        automaticUpdates.state = automatic ? .on : .off
+        automaticUpdates.isEnabled = onAutomaticUpdatesChanged != nil
+        checkUpdates.isEnabled = available
+    }
+    @objc private func changeAutomaticUpdates() {
+        onAutomaticUpdatesChanged?(automaticUpdates.state == .on)
+    }
+    @objc private func checkForUpdates() { onCheckForUpdates?() }
+    @objc private func openGitHub() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/archetypetrickster-tech/my-music")!)
     }
     private func selectType(socks selected: Bool) {
         socks.selected = selected
@@ -428,6 +474,7 @@ extension MusicApp {
         connectionPanel.load(
             connectionSettings,
             password: selfTest || connectionSettings.username.isEmpty ? "" : ConnectionSettings.password())
+        refreshUpdateSettings()
         presentOverlay(settings: true)
     }
     func applyConnectionSettings() {
