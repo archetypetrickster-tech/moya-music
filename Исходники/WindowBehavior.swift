@@ -105,8 +105,8 @@ extension MusicApp {
         return frame.minX > area.minX + 12 && frame.maxX < area.maxX - 12 && frame.minY > area.minY + 12 && frame.maxY < area.maxY - 12
     }
     func layoutPlayerColumn() {
-        guard let root = surface, playerWidth != nil, queueWidth != nil, root.bounds.width >= 340 else { return }
-        let heightLimit = compact ? 660 : max(340, root.bounds.height - chromeInset - 228)
+        guard let root = surface, playerWidth != nil, queueWidth != nil, root.bounds.width >= 416 else { return }
+        let heightLimit = compact ? 660 : max(416, root.bounds.height - chromeInset - 228)
         let width = min(660, root.bounds.width, heightLimit)
         if abs(playerWidth.constant - width) > 0.5 { playerWidth.constant = width }
         if abs(queueWidth.constant - (width - 32)) > 0.5 { queueWidth.constant = width - 32 }

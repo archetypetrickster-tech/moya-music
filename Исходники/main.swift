@@ -482,14 +482,14 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     }
 
     func setupMini() {
-        mini = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 340, height: 540), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        mini = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 416, height: 540), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         mini.title = "Моя музыка"; mini.titleVisibility = .hidden
         mini.titlebarAppearsTransparent = true; mini.isMovableByWindowBackground = true
         mini.titlebarSeparatorStyle = .none
         mini.acceptsMouseMovedEvents = true
         mini.isOpaque = false; mini.backgroundColor = .clear; mini.hasShadow = false
-        mini.minSize = NSSize(width: 340, height: 598)
-        mini.minFullScreenContentSize = NSSize(width: 340, height: 598)
+        mini.minSize = NSSize(width: 416, height: 674)
+        mini.minFullScreenContentSize = NSSize(width: 416, height: 674)
         mini.collectionBehavior = [.fullScreenPrimary, .fullScreenAllowsTiling]
         mini.tabbingMode = .disallowed
         mini.delegate = self; mini.isReleasedWhenClosed = false
@@ -522,7 +522,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         root.addSubview(playerContainer)
         fullPlayerHeight = playerContainer.heightAnchor.constraint(equalTo: playerContainer.widthAnchor, constant: 228)
         compactPlayerHeight = playerContainer.heightAnchor.constraint(equalToConstant: 222)
-        playerWidth = playerContainer.widthAnchor.constraint(equalToConstant: 340)
+        playerWidth = playerContainer.widthAnchor.constraint(equalToConstant: 416)
         playerTop = playerContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: 0)
         NSLayoutConstraint.activate([
             playerContainer.centerXAnchor.constraint(equalTo: root.centerXAnchor), playerWidth!,
@@ -531,28 +531,28 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         sourceSwitch = SourceSwitch(frame:.zero)
         sourceSwitch.target = self; sourceSwitch.action = #selector(sourceSwitchChanged(_:))
         sourceSwitch.translatesAutoresizingMaskIntoConstraints = false
-        sourceSwitch.widthAnchor.constraint(equalToConstant:128).isActive = true
-        sourceSwitch.heightAnchor.constraint(equalToConstant:28).isActive = true
-        shuffleButton = iconButton("shuffle", "Случайный порядок", #selector(toggleShuffle), 16, 28)
+        sourceSwitch.widthAnchor.constraint(equalToConstant:164).isActive = true
+        sourceSwitch.heightAnchor.constraint(equalToConstant:32).isActive = true
+        shuffleButton = iconButton("shuffle", "Случайный порядок", #selector(toggleShuffle), 16, 32)
         shuffleButton.isEnabled = false
-        compactButton = iconButton("minimize-in", "Компактный вид", #selector(toggleCompact), 16, 28)
-        let libraryButton = iconButton("square.grid.2x2", "Открыть библиотеку", #selector(showLibrary), 16, 28)
-        repeatButton = iconButton("repeat", "Повтор выключен", #selector(toggleRepeat), 16, 28)
+        compactButton = iconButton("minimize-in", "Компактный вид", #selector(toggleCompact), 16, 32)
+        let libraryButton = iconButton("square.grid.2x2", "Открыть библиотеку", #selector(showLibrary), 16, 32)
+        repeatButton = iconButton("repeat", "Повтор выключен", #selector(toggleRepeat), 16, 32)
         repeatButton.isEnabled = false
-        pinButton = iconButton("pushpin","Поверх окон",#selector(togglePin),16, 28)
+        pinButton = iconButton("pushpin","Поверх окон",#selector(togglePin),16, 32)
         pinButton.selected = alwaysOnTop
         pinButton.image = IconLibrary.image(alwaysOnTop ? "pushpin-filled":"pushpin",size:16)
         let shield = NSImage(systemSymbolName:"gearshape",accessibilityDescription:nil)!
         shield.size = NSSize(width:16,height:16)
         settingsButton = IconButton(image:shield,target:self,action:#selector(showConnectionSettings))
         settingsButton.isBordered = false; settingsButton.translatesAutoresizingMaskIntoConstraints = false
-        settingsButton.widthAnchor.constraint(equalToConstant:28).isActive = true; settingsButton.heightAnchor.constraint(equalToConstant:28).isActive = true
+        settingsButton.widthAnchor.constraint(equalToConstant:32).isActive = true; settingsButton.heightAnchor.constraint(equalToConstant:32).isActive = true
         settingsButton.setAccessibilityLabel("Настройки")
         let proxyMenu = NSMenu()
         proxyMenu.addItem(withTitle:"Настройки…",action:#selector(showConnectionSettings),keyEquivalent:"").target = self
         settingsButton.menu = proxyMenu
         let top = NSStackView(views: [libraryButton, repeatButton!, shuffleButton!, sourceSwitch!, settingsButton!, pinButton!, compactButton])
-        top.orientation = .horizontal; top.spacing = 2; top.distribution = .equalSpacing; top.alignment = .centerY
+        top.orientation = .horizontal; top.spacing = 4; top.distribution = .equalSpacing; top.alignment = .centerY
         for artwork in [cover,compactArtwork] {
             artwork.image = nil
             artwork.contentTintColor = accent; artwork.imageScaling = .scaleProportionallyUpOrDown
@@ -655,7 +655,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         ])
         setupQueuePanels(root: root)
         var initialFrame = mini.frame
-        initialFrame.size = NSSize(width: 340, height: 598)
+        initialFrame.size = NSSize(width: 416, height: 674)
         mini.setFrame(initialFrame, display: false)
         mini.center()
         setupWindowChrome()
@@ -719,7 +719,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         artworkContainer.isHidden = enabled; compactArtwork.isHidden = !enabled; timeRow.isHidden = enabled
         if enabled { compactPlayerHeight.isActive = true } else { fullPlayerHeight.isActive = true }
         dockedQueue.isHidden = true; dockedQueueSuppressed = false
-        mini.minSize = NSSize(width: 340, height: 252)
+        mini.minSize = NSSize(width: 416, height: 252)
         var target = oldFrame
         if !preserveFrame {
             let height: CGFloat = (enabled ? 222 : min(target.width, 660) + 228) + windowTopReserve
@@ -750,7 +750,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     }
     func configureWindowLimits() {
         guard !fullScreenPhase.isTransitioning else { return }
-        mini.minSize = NSSize(width: 340, height: (queueOverlay || !compact ? 568 : 222) + 30)
+        mini.minSize = NSSize(width: 416, height: (queueOverlay || !compact ? 644 : 222) + 30)
     }
     func setupQueuePanels(root: NSView) {
         for panel in [overlayQueue,dockedQueue] {
@@ -775,7 +775,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         overlayQueue.prepare(docked: false); dockedQueue.prepare(docked: true)
         dockedQueue.translatesAutoresizingMaskIntoConstraints = true
         dockedQueue.frame = NSRect(x:16,y:12,width:max(1,root.bounds.width-32),height:120)
-        queueWidth = overlayQueue.widthAnchor.constraint(equalToConstant: 308)
+        queueWidth = overlayQueue.widthAnchor.constraint(equalToConstant: 384)
         queueTop = overlayQueue.topAnchor.constraint(equalTo: root.topAnchor, constant: 16 + chromeInset)
         NSLayoutConstraint.activate([
             overlayQueue.centerXAnchor.constraint(equalTo: root.centerXAnchor), queueWidth!,
@@ -783,7 +783,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             overlayQueue.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16)
         ])
     }
-    var basePlayerHeight: CGFloat { (compact ? 222 : (playerWidth?.constant ?? 340) + 228) + chromeInset }
+    var basePlayerHeight: CGFloat { (compact ? 222 : (playerWidth?.constant ?? 416) + 228) + chromeInset }
     @objc func toggleQueue() { presentOverlay(settings:false) }
     func presentOverlay(settings: Bool) {
         guard !windowTransition && !fullScreenPhase.isTransitioning else { return }
@@ -794,7 +794,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         connectionPanel.isHidden = !settings
         overlayQueue.prepare(docked: false); overlayQueue.showLoading()
         playerContainer.isHidden = true; dockedQueue.isHidden = true; overlayQueue.isHidden = settings
-        mini.minSize = NSSize(width: 340, height: 222)
+        mini.minSize = NSSize(width: 416, height: 222)
         var frame = mini.frame
         if !preservesSystemFrame {
             let height = max(frame.height, min(frame.width, 660) + 228 + windowTopReserve)
@@ -807,7 +807,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         guard queueOverlay && !windowTransition else { return }
         let frozen = queueTransitionSnapshot()
         queueOverlay = false; settingsOpen = false; connectionPanel.isHidden = true; overlayQueue.isHidden = true; playerContainer.isHidden = false
-        mini.minSize = NSSize(width: 340, height: 222)
+        mini.minSize = NSSize(width: 416, height: 222)
         var frame = queueReturnFrame ?? mini.frame
         if preservesSystemFrame { frame = mini.frame }
         else {
