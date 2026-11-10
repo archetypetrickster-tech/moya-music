@@ -204,5 +204,5 @@
   function postQueue(value) { window.webkit?.messageHandlers?.music?.postMessage({queueSnapshot:value}); }
   function watch(value) { watching=!!value; if(watching) refresh().then(postQueue).catch(()=>postQueue(snapshot())); }
   setInterval(()=>{ startPendingTrack(); rememberCurrent(); if(watching) refresh().then(postQueue).catch(()=>{}); }, 1800);
-  window.__moyaQueue = {refresh,snapshot,select,watch,startPendingTrack,shuffleState,toggleShuffle};
+  window.__moyaQueue = {currentURL: () => { discover(); return currentTrack()?.url || ""; },refresh,snapshot,select,watch,startPendingTrack,shuffleState,toggleShuffle};
 })();

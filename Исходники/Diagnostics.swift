@@ -74,6 +74,8 @@ extension MusicApp {
                   state["repeat"] as? String == "one" else {
                 print("SELF_TEST_FAILED: \(result)"); exit(1)
             }
+            precondition(MusicApp.trackPageURL("/album/12/track/34")?.absoluteString == "https://music.yandex.ru/album/12/track/34")
+            precondition(MusicApp.trackPageURL("https://example.org/track/34") == nil)
             self.update(state)
             self.checkSourceSwitch()
             let original = self.compact
@@ -104,7 +106,7 @@ extension MusicApp {
             self.setCompact(true)
             self.showConnectionSettings()
             self.mini.contentView?.layoutSubtreeIfNeeded()
-            precondition(self.settingsOpen && self.queueOverlay && !self.connectionPanel.isHidden)
+            precondition(self.settingsOpen && self.queueOverlay && !self.connectionPanel.isHidden && !self.queueButton.selected)
             if let path = ProcessInfo.processInfo.environment["MOYA_PREVIEW_PATH"] { self.savePreview(URL(fileURLWithPath:path).deletingPathExtension().path + "-settings.png") }
             self.connectionPanel.showProxy(true)
             self.mini.contentView?.layoutSubtreeIfNeeded()

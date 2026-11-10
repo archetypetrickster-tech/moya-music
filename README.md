@@ -1,16 +1,17 @@
-# Моя музыка
+# My Music
 
 **Небольшой неофициальный плеер Яндекс Музыки для macOS.**
 
 Цвета обложки, «Волна», любимые треки и очередь — в одном окне, которое можно сделать совсем маленьким.
 
-[**Скачать для Mac ↓**](https://github.com/archetypetrickster-tech/moya-music/releases/latest/download/moya-music-macos.zip) · [Страница проекта](https://archetypetrickster-tech.github.io/moya-music/) · [Сообщить об ошибке](https://github.com/archetypetrickster-tech/moya-music/issues)
+[**Скачать для Mac ↓**](https://github.com/archetypetrickster-tech/my-music/releases/latest/download/my-music-macos.zip) · [Страница проекта](https://archetypetrickster-tech.github.io/my-music/) · [Сообщить об ошибке](https://github.com/archetypetrickster-tech/my-music/issues)
 
 ![Плеер подстраивается под цвета разных обложек](docs/assets/gallery.jpg)
 
 ## Что умеет
 
 - **Волна и Моё.** Единый переключатель с плавной подсветкой: персональные рекомендации и понравившиеся треки.
+- **Страница песни.** Клик по названию открывает текущую песню в браузере, не прерывая воспроизведение виджета.
 - **Обложка задаёт цвет.** Размытый фон медленно вращается и меняется вместе с музыкой.
 - **Компактный режим.** Маленькая обложка рядом с названием и исполнителем, когда нужно больше места.
 - **Очередь.** Вместо плеера или под ним при увеличении высоты окна. В «Волне» — история и один следующий трек, в «Моём» — текущая очередь сайта.
@@ -24,7 +25,7 @@
 
 ## Установка без ИИ и команд
 
-1. [Скачайте готовый архив](https://github.com/archetypetrickster-tech/moya-music/releases/latest/download/moya-music-macos.zip) и полностью распакуйте его.
+1. [Скачайте готовый архив](https://github.com/archetypetrickster-tech/my-music/releases/latest/download/my-music-macos.zip) и полностью распакуйте его.
 2. Дважды нажмите **«Установить.command»**.
 3. Выберите `1` — без автозапуска, `2` — запуск при входе или `3` — дополнительно запуск при подключении наушников.
 4. Войдите в свой аккаунт на странице Яндекса и нажмите **«Волна»** или **«Моё»**.
@@ -58,8 +59,8 @@
 Нужны Xcode или Command Line Tools **с SDK macOS 27+**. Это требование сборки, а не запуска готового приложения.
 
 ```sh
-git clone https://github.com/archetypetrickster-tech/moya-music.git
-cd moya-music
+git clone https://github.com/archetypetrickster-tech/my-music.git
+cd my-music
 zsh Исходники/build.sh
 ```
 
@@ -107,7 +108,7 @@ python3 Исходники/tests/check-proxy.py
 
 Идея, интерфейс и арт-дирекшн — Максим Чистов. Приложение собрано и доработано с помощью Codex. Проект начался с желания сделать удобный маленький плеер для своего Mac.
 
-Ошибки и предложения — в [Issues](https://github.com/archetypetrickster-tech/moya-music/issues). Для ошибки полезны версия macOS, тип процессора и короткое описание действий. Не прикладывайте cookies, токены, пароли или персональные логи. Исправления можно предлагать через pull request.
+Ошибки и предложения — в [Issues](https://github.com/archetypetrickster-tech/my-music/issues). Для ошибки полезны версия macOS, тип процессора и короткое описание действий. Не прикладывайте cookies, токены, пароли или персональные логи. Исправления можно предлагать через pull request.
 
 ## Лицензия и графика
 

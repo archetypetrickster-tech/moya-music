@@ -32,7 +32,7 @@ private final class QueueTrackCell: NSView {
     let duration = NSTextField(labelWithString: "")
     var current = false
     var playing = false
-    var hovered = false { didSet { needsDisplay = true } }
+    var hoverAmount: CGFloat = 0 { didSet { needsDisplay = true } }
     override var isFlipped: Bool { true }
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -58,11 +58,11 @@ private final class QueueTrackCell: NSView {
     }
     override func draw(_ dirtyRect: NSRect) {
         let hit = NSRect(x: 10, y: bounds.midY - 15, width: 30, height: 30)
-        if hovered {
-            NSColor.white.withAlphaComponent(0.08).setFill()
+        if hoverAmount > 0.001 {
+            NSColor.white.withAlphaComponent(0.08*hoverAmount).setFill()
             NSBezierPath(roundedRect: hit, xRadius: 6, yRadius: 6).fill()
         }
-        let color: NSColor = current ? .yellow : .white.withAlphaComponent(hovered ? 1 : 0.4)
+        let color: NSColor = current ? .yellow : .white.withAlphaComponent(0.4+0.6*hoverAmount)
         IconLibrary.draw(IconLibrary.image(current && playing ? "pause" : "play", size: 18),
                          in: NSRect(x: hit.midX - 9, y: hit.midY - 9, width: 18, height: 18), color: color)
     }
@@ -72,15 +72,32 @@ private final class QueueTableRow: NSTableRowView {
     var current = false
     var isTrack = false
     private var inside = false
+    private var hoverAmount: CGFloat = 0
+    private var ticker: Timer?
     func setHovered(_ value: Bool) {
         let value = isTrack && value
-        if inside != value { inside = value; needsDisplay = true }
-        (view(atColumn: 0) as? QueueTrackCell)?.hovered = value
+        (view(atColumn:0) as? QueueTrackCell)?.hoverAmount = hoverAmount
+        guard inside != value else { return }
+        inside = value
+        guard ticker == nil else { return }
+        let timer = Timer(timeInterval:1.0/60,repeats:true) { [weak self] timer in
+            guard let self,self.window != nil else { timer.invalidate(); return }
+            let target: CGFloat = self.inside ? 1:0
+            self.hoverAmount += (target-self.hoverAmount) * (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1:0.35)
+            (self.view(atColumn:0) as? QueueTrackCell)?.hoverAmount = self.hoverAmount
+            self.needsDisplay = true
+            if abs(target-self.hoverAmount)<0.005 { self.hoverAmount = target; timer.invalidate(); self.ticker = nil }
+        }
+        ticker = timer; RunLoop.main.add(timer,forMode:.common)
+    }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { ticker?.invalidate(); ticker = nil; inside = false; hoverAmount = 0 }
     }
     override func drawBackground(in dirtyRect: NSRect) {
-        guard isTrack && (current || inside) else { return }
-        (current ? NSColor.yellow.withAlphaComponent(0.10) : NSColor.white.withAlphaComponent(0.055)).setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 2), xRadius: 7, yRadius: 7).fill()
+        guard isTrack && (current || hoverAmount > 0.001) else { return }
+        (current ? NSColor.yellow.withAlphaComponent(0.10+0.025*hoverAmount) : NSColor.white.withAlphaComponent(0.055*hoverAmount)).setFill()
+        NSBezierPath(roundedRect:bounds.insetBy(dx:1,dy:2),xRadius:7,yRadius:7).fill()
     }
 }
 

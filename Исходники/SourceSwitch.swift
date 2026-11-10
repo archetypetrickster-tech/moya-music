@@ -32,6 +32,10 @@ final class SourceSwitch: NSSegmentedControl {
             thumb = thumbTarget; needsDisplay = true
         } else if abs(thumbTarget-thumb) > 0.002 { animate() }
     }
+    override func viewDidHide() {
+        super.viewDidHide(); hoveredSegment = -1; hover = 0; hoverTarget = 0
+        thumb = thumbTarget; ticker?.invalidate(); ticker = nil; needsDisplay = true
+    }
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let tracking { removeTrackingArea(tracking) }
@@ -70,8 +74,8 @@ final class SourceSwitch: NSSegmentedControl {
         guard ticker == nil else { return }
         let timer = Timer(timeInterval:1.0/60, repeats:true) { [weak self] timer in
             guard let self else { timer.invalidate(); return }
-            self.thumb += (self.thumbTarget - self.thumb) * 0.22
-            self.hover += (self.hoverTarget - self.hover) * 0.22
+            self.thumb += (self.thumbTarget - self.thumb) * 0.3
+            self.hover += (self.hoverTarget - self.hover) * 0.3
             self.needsDisplay = true
             if abs(self.thumbTarget-self.thumb)+abs(self.hoverTarget-self.hover) < 0.002 {
                 self.thumb = self.thumbTarget; self.hover = self.hoverTarget

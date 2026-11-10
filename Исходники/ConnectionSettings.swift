@@ -189,6 +189,12 @@ final class ConnectionPanel: NSView {
         if process.terminationStatus != 0 { try? fm.removeItem(at:url); throw NSError(domain:"MoyaMusic",code:Int(process.terminationStatus),userInfo:[NSLocalizedDescriptionKey:"macOS не разрешила включить автозапуск"]) }
     }
     func showProxy(_ show: Bool) {
+        if window != nil && !isHiddenOrHasHiddenAncestor && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            wantsLayer = true
+            let fade = CATransition(); fade.type = .fade; fade.duration = 0.16
+            fade.timingFunction = CAMediaTimingFunction(name:.easeInEaseOut)
+            layer?.add(fade,forKey:"settingsPageFade")
+        }
         proxyPage = show; basic.isHidden = show; proxyForm.isHidden = !show
         heading.stringValue = show ? "Прокси":"Настройки"
         back.title = show ? "‹ Настройки":"‹ Плеер"

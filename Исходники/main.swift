@@ -161,6 +161,25 @@ final class ChromeHoverView: NSView {
 }
 
 final class TrackTitle: NSTextField {
+    var onOpen: (() -> Void)?
+    var linkEnabled = false
+    private var hoverTarget: CGFloat = 0
+    private var hoverAmount: CGFloat = 0
+    private var tracking: NSTrackingArea?
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect:.zero,options:[.mouseEnteredAndExited,.activeAlways,.inVisibleRect],owner:self)
+        addTrackingArea(area); tracking = area
+    }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func resetCursorRects() { if linkEnabled { addCursorRect(bounds,cursor:.pointingHand) } }
+    override func mouseEntered(with event: NSEvent) { hoverTarget = linkEnabled ? 1:0 }
+    override func mouseExited(with event: NSEvent) { hoverTarget = 0 }
+    override func viewDidHide() { super.viewDidHide(); hoverTarget = 0; hoverAmount = 0; needsDisplay = true }
+    override func mouseDown(with event: NSEvent) { }
+    override func mouseUp(with event: NSEvent) { if linkEnabled && bounds.contains(convert(event.locationInWindow,from:nil)) { onOpen?() } }
+    override func accessibilityPerformPress() -> Bool { guard linkEnabled else { return false }; onOpen?(); return true }
     private var offset: CGFloat = 0
     private var started = ProcessInfo.processInfo.systemUptime
     private var ticker: Timer?
@@ -178,6 +197,10 @@ final class TrackTitle: NSTextField {
         }
     }
     private func advance() {
+        if abs(hoverTarget-hoverAmount)>0.001 {
+            hoverAmount += (hoverTarget-hoverAmount) * (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1:0.4)
+            needsDisplay = true
+        }
         let width = (stringValue as NSString).size(withAttributes: [.font: font ?? NSFont.systemFont(ofSize: 20, weight: .bold)]).width
         guard width > bounds.width else { offset = 0; needsDisplay = true; return }
         guard ProcessInfo.processInfo.systemUptime - started > 1.6 else { return }
@@ -186,7 +209,7 @@ final class TrackTitle: NSTextField {
         needsDisplay = true
     }
     override func draw(_ dirtyRect: NSRect) {
-        let attributes: [NSAttributedString.Key:Any] = [.font: font ?? NSFont.systemFont(ofSize: 20, weight: .bold), .foregroundColor: textColor ?? NSColor.labelColor]
+        let attributes: [NSAttributedString.Key:Any] = [.font: font ?? NSFont.systemFont(ofSize: 20, weight: .bold), .foregroundColor:(textColor ?? NSColor.labelColor).withAlphaComponent(linkEnabled ? 0.86+0.14*hoverAmount:1)]
         let text = stringValue as NSString
         let size = text.size(withAttributes: attributes)
         NSGraphicsContext.saveGraphicsState()
@@ -237,6 +260,11 @@ class HoverButton: NSButton {
     }
     override func mouseEntered(with event: NSEvent) { mouseInside = true; animateFeedback() }
     override func mouseExited(with event: NSEvent) { mouseInside = false; animateFeedback() }
+    func resetFeedback() {
+        mouseInside = false; pressed = false; hoverAmount = 0; pressAmount = 0
+        selectionAmount = selected ? 1:0; ticker?.invalidate(); ticker = nil; needsDisplay = true
+    }
+    override func viewDidHide() { super.viewDidHide(); resetFeedback() }
     override func mouseDown(with event: NSEvent) {
         guard isEnabled else { return }
         pressed = true; animateFeedback()
@@ -250,7 +278,7 @@ class HoverButton: NSButton {
             let hover: CGFloat = self.mouseInside && self.isEnabled ? 1 : 0
             let selection: CGFloat = self.selected ? 1 : 0
             let press: CGFloat = self.pressed ? 1 : 0
-            let speed: CGFloat = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 0.25
+            let speed: CGFloat = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 0.32
             self.hoverAmount += (hover - self.hoverAmount) * speed
             self.selectionAmount += (selection - self.selectionAmount) * speed
             self.pressAmount += (press - self.pressAmount) * speed
@@ -579,6 +607,8 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
             cover.widthAnchor.constraint(equalTo: cover.heightAnchor),
             cover.widthAnchor.constraint(equalTo: artworkContainer.widthAnchor)
         ])
+        titleLabel.onOpen = { [weak self] in self?.openCurrentTrackPage() }
+        titleLabel.toolTip = "Открыть страницу песни в Яндекс Музыке"
         titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
         artistLabel.font = .systemFont(ofSize: 14); artistLabel.textColor = .secondaryLabelColor
         for label in [titleLabel, artistLabel] {
@@ -591,7 +621,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         queueButton.translatesAutoresizingMaskIntoConstraints = false
         queueButton.widthAnchor.constraint(equalToConstant: 32).isActive = true
         queueButton.heightAnchor.constraint(equalToConstant: 32).isActive = true
-        let artistRow = NSStackView(views: [artistLabel, NSView(), repeatButton!, shuffleButton!, queueButton!])
+        let artistRow = NSStackView(views: [artistLabel, NSView(), shuffleButton!, repeatButton!, queueButton!])
         artistRow.orientation = .horizontal; artistRow.alignment = .centerY; artistRow.spacing = 4
         let metadataLabels = NSStackView(views:[titleLabel,artistRow])
         metadataLabels.orientation = .vertical; metadataLabels.alignment = .leading; metadataLabels.spacing = 0
@@ -719,6 +749,8 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         let preserveFrame = preservesSystemFrame
         let frozen = queueTransitionSnapshot()
         compact = enabled
+        if frozen != nil { playerContainer.alphaValue = 0 }
+        resetPlayerFeedback()
         fullPlayerHeight.isActive = false; compactPlayerHeight.isActive = false
         artworkHeight.isActive = !enabled
         artworkContainer.isHidden = enabled; compactArtwork.isHidden = !enabled; timeRow.isHidden = enabled
@@ -740,10 +772,9 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         guard let root = surface, let content = source ?? playerContainer, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return nil }
         content.cacheDisplay(in: content.bounds, to: bitmap)
         let image = NSImage(size: content.bounds.size); image.addRepresentation(bitmap)
-        let isPlayer = content === playerContainer
-        let view = NSImageView(frame: isPlayer ? content.frame : root.bounds)
+        let view = NSImageView(frame: content.convert(content.bounds,to:root))
         view.image = image; view.imageScaling = .scaleNone; view.imageAlignment = .alignTopLeft
-        view.autoresizingMask = isPlayer ? [.minXMargin,.maxXMargin,.minYMargin] : [.width,.height]
+        view.autoresizingMask = [.minXMargin,.maxXMargin,.minYMargin]
         root.addSubview(view); transitionSnapshot = view
         return view
     }
@@ -796,6 +827,8 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         let frozen = queueTransitionSnapshot()
         queueReturnFrame = mini.frame
         queueOverlay = true; settingsOpen = settings
+        resetPlayerFeedback()
+        if frozen != nil { (settings ? connectionPanel:overlayQueue).alphaValue = 0 }
         connectionPanel.isHidden = !settings
         overlayQueue.prepare(docked: false); overlayQueue.showLoading()
         playerContainer.isHidden = true; dockedQueue.isHidden = true; overlayQueue.isHidden = settings
@@ -811,7 +844,10 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     func closeQueueOverlay() {
         guard queueOverlay && !windowTransition else { return }
         let frozen = queueTransitionSnapshot()
-        queueOverlay = false; settingsOpen = false; connectionPanel.isHidden = true; overlayQueue.isHidden = true; playerContainer.isHidden = false
+        queueOverlay = false; settingsOpen = false
+        resetPlayerFeedback()
+        if frozen != nil { playerContainer.alphaValue = 0 }
+        connectionPanel.isHidden = true; overlayQueue.isHidden = true; playerContainer.isHidden = false
         mini.minSize = NSSize(width: 340, height: 222)
         var frame = queueReturnFrame ?? mini.frame
         if preservesSystemFrame { frame = mini.frame }
@@ -825,7 +861,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     }
     func queueTransitionSnapshot() -> NSImageView? {
         guard mini.isVisible && !selfTest && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return nil }
-        return snapshotOverlay(surface)
+        return snapshotOverlay(queueOverlay ? (settingsOpen ? connectionPanel:overlayQueue):playerContainer)
     }
     func animateQueueChange(to frame: NSRect, showing view: NSView, frozen: NSImageView?) {
         guard let frozen else {
@@ -836,19 +872,39 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         let generation = transitionGeneration
         windowTransition = true; compactButton.isEnabled = false
         view.alphaValue = 0
-        let reveal = { [weak self, weak frozen, weak view] in
-            guard let self, generation == self.transitionGeneration else { return }
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.18; context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                frozen?.animator().alphaValue = 0; view?.animator().alphaValue = 1
-            }, completionHandler: { [weak self, weak frozen] in
-                guard let self, generation == self.transitionGeneration else { return }
-                frozen?.removeFromSuperview(); self.finishWindowTransition()
-            })
+        let resize = !preservesSystemFrame && mini.frame != frame
+        var sizeDone = !resize, fadeDone = false
+        let complete = { [weak self] in
+            guard let self, generation == self.transitionGeneration, sizeDone, fadeDone else { return }
+            self.finishWindowTransition()
         }
-        if !preservesSystemFrame && mini.frame != frame {
-            frameAnimator.move(mini, to: frame, completion: reveal)
-        } else { reveal() }
+        if resize { frameAnimator.move(mini,to:frame) { sizeDone = true; complete() } }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.20; context.timingFunction = CAMediaTimingFunction(name:.easeInEaseOut)
+            frozen.animator().alphaValue = 0; view.animator().alphaValue = 1
+        },completionHandler: { fadeDone = true; complete() })
+    }
+    func resetPlayerFeedback() {
+        func clear(_ view: NSView) {
+            (view as? HoverButton)?.resetFeedback()
+            view.subviews.forEach(clear)
+        }
+        clear(playerContainer)
+        queueButton?.selected = dockedQueueVisible || (queueOverlay && !settingsOpen)
+    }
+    static func trackPageURL(_ raw: String) -> URL? {
+        guard var parts = URLComponents(url:URL(string:raw,relativeTo:URL(string:"https://music.yandex.ru"))?.absoluteURL ?? URL(fileURLWithPath:"/"),resolvingAgainstBaseURL:true),
+              parts.scheme == "https",let host = parts.host,
+              ["music.yandex.ru","music.yandex.com","music.yandex.by","music.yandex.kz","music.yandex.uz"].contains(host),
+              parts.path.contains("/track/") else { return nil }
+        parts.query = nil; parts.fragment = nil
+        return parts.url
+    }
+    func openCurrentTrackPage() {
+        web.evaluateJavaScript("window.__moyaQueue?.currentURL() || ''") { value,_ in
+            guard let raw = value as? String,let url = Self.trackPageURL(raw) else { return }
+            NSWorkspace.shared.open(url)
+        }
     }
     func collapseDockedQueue() {
         if preservesSystemFrame { dockedQueueSuppressed = true; layoutQueueRegion(); return }
@@ -868,7 +924,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         let frame = NSRect(x:(root.bounds.width-columnWidth)/2+16,y:12,width:max(1,columnWidth-32),height:showDocked ? available : 120)
         if dockedQueue.frame != frame { dockedQueue.frame = frame; dockedQueue.needsLayout = true }
         if dockedQueue.isHidden == showDocked { dockedQueue.isHidden = !showDocked }
-        queueButton?.selected = showDocked || queueOverlay
+        queueButton?.selected = showDocked || (queueOverlay && !settingsOpen)
         let wants = (queueOverlay && !settingsOpen) || showDocked
         if wants != queueWatching {
             queueWatching = wants
@@ -941,6 +997,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
     }
     func update(_ data: [String: Any]) {
         let ready = data["ready"] as? Bool ?? false
+        if titleLabel.linkEnabled != ready { titleLabel.linkEnabled = ready; mini.invalidateCursorRects(for:titleLabel) }
         if ready {
             titleLabel.stringValue = data["title"] as? String ?? ""
             artistLabel.stringValue = data["artist"] as? String ?? ""

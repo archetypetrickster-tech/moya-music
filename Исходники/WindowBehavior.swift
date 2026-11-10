@@ -66,7 +66,7 @@ final class PlayerFrameAnimator: NSObject, NSAnimationDelegate {
             .endFrame: NSValue(rect: frame)
         ]])
         self.animation = animation; self.completion = completion
-        animation.duration = 0.24; animation.animationCurve = .easeInOut
+        animation.duration = 0.22; animation.animationCurve = .easeInOut
         animation.animationBlockingMode = .nonblocking; animation.delegate = self
         animation.start()
     }
@@ -220,7 +220,7 @@ extension MusicApp {
         chromeVisible = visible; refreshChromeColors()
         if !visible { chromeView.updateGroupHover(false) }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.18; chromeView.animator().alphaValue = visible ? 1 : 0
+            context.duration = 0.16; context.timingFunction = CAMediaTimingFunction(name:.easeInEaseOut); chromeView.animator().alphaValue = visible ? 1 : 0
         }
     }
     func cancelWindowTransition() {
