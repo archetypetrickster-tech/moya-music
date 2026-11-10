@@ -94,7 +94,7 @@ extension MusicApp {
         ].enumerated() {
             let button = ChromeButton(frame: NSRect(x: 4 + index * 24, y: 5, width: 14, height: 14))
             button.kind = item.0; button.target = self; button.action = item.1
-            button.isBordered = false; button.setButtonType(.momentaryChange)
+            button.isBordered = false; button.focusRingType = .none; button.setButtonType(.momentaryChange)
             button.toolTip = item.2; button.setAccessibilityLabel(item.2)
             chromeView.addSubview(button)
         }

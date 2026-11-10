@@ -117,20 +117,20 @@ final class ChromeButton: NSButton {
         } else { color = NSColor(srgbRed: 0.57, green: 0.57, blue: 0.59, alpha: 1) }
         let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5))
         (isHighlighted ? color.blended(withFraction: 0.18, of: .black)! : color).setFill()
-        if let gradient = NSGradient(starting: color.blended(withFraction: 0.32, of: .white)!, ending: color.blended(withFraction: 0.12, of: .black)!) {
+        if let gradient = NSGradient(starting: color.blended(withFraction: 0.20, of: .white)!, ending: color.blended(withFraction: 0.06, of: .black)!) {
             gradient.draw(in: circle, angle: -90)
         } else { circle.fill() }
         NSGraphicsContext.saveGraphicsState()
         circle.addClip()
-        NSColor.white.withAlphaComponent(colored ? 0.23 : 0.30).setFill()
+        NSColor.white.withAlphaComponent(colored ? 0.12 : 0.16).setFill()
         NSBezierPath(ovalIn: NSRect(x: bounds.minX + 2, y: bounds.midY + 0.5, width: bounds.width - 4, height: bounds.height * 0.40)).fill()
         NSGraphicsContext.restoreGraphicsState()
-        NSColor.black.withAlphaComponent(0.17).setStroke(); circle.lineWidth = 0.5; circle.stroke()
+        NSColor.black.withAlphaComponent(0.045).setStroke(); circle.lineWidth = 0.5; circle.stroke()
         guard groupHovered else { return }
-        NSColor.black.withAlphaComponent(0.65).setStroke()
-        NSColor.black.withAlphaComponent(0.65).setFill()
+        NSColor.black.withAlphaComponent(0.48).setStroke()
+        NSColor.black.withAlphaComponent(0.48).setFill()
         let x = bounds.midX, y = bounds.midY
-        let mark = NSBezierPath(); mark.lineWidth = 1.15; mark.lineCapStyle = .round
+        let mark = NSBezierPath(); mark.lineWidth = 1.0; mark.lineCapStyle = .round
         switch kind {
         case .close:
             mark.move(to: NSPoint(x: x-2.4, y: y-2.4)); mark.line(to: NSPoint(x: x+2.4, y: y+2.4))
@@ -272,7 +272,7 @@ class HoverButton: NSButton {
 final class IconButton: HoverButton {
     override func draw(_ dirtyRect: NSRect) {
         NSColor.white.withAlphaComponent(hoverAmount * 0.09 + pressAmount * 0.07 + selectionAmount * 0.04).setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 8, yRadius: 8).fill()
+        NSBezierPath(roundedRect: bounds, xRadius: 11, yRadius: 11).fill()
         guard let image else { return }
         let size = image.size.width - pressAmount * 1.5
         IconLibrary.draw(image, in: NSRect(x: bounds.midX - size / 2, y: bounds.midY - size / 2, width: size, height: size), color: foreground)
@@ -519,7 +519,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         repeatButton = iconButton("repeat", "Повтор выключен", #selector(toggleRepeat), 16)
         repeatButton.isEnabled = false
         let top = NSStackView(views: [shuffleButton!, repeatButton!, sourceSwitch!, libraryButton, compactButton])
-        top.orientation = .horizontal; top.spacing = 6; top.distribution = .equalSpacing; top.alignment = .centerY
+        top.orientation = .horizontal; top.spacing = 4; top.distribution = .equalSpacing; top.alignment = .centerY
         cover.image = nil
         cover.contentTintColor = accent; cover.imageScaling = .scaleProportionallyUpOrDown
         cover.wantsLayer = true; cover.layer?.cornerRadius = 6; cover.layer?.cornerCurve = .continuous; cover.layer?.masksToBounds = true
@@ -544,8 +544,8 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         queueButton = IconButton(image: IconLibrary.image("playlist", size: 18), target: self, action: #selector(toggleQueue))
         queueButton.isBordered = false; queueButton.toolTip = "Очередь треков"; queueButton.setAccessibilityLabel("Открыть очередь треков")
         queueButton.translatesAutoresizingMaskIntoConstraints = false
-        queueButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        queueButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        queueButton.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        queueButton.heightAnchor.constraint(equalToConstant: 32).isActive = true
         let artistRow = NSStackView(views: [artistLabel, NSView(), queueButton!])
         artistRow.orientation = .horizontal; artistRow.alignment = .centerY; artistRow.spacing = 8
         progress.cell = PlayerSliderCell()
@@ -581,7 +581,7 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         stack.setCustomSpacing(14, after: top)
         stack.setCustomSpacing(14, after: artworkContainer)
         stack.setCustomSpacing(0, after: titleLabel)
-        stack.setCustomSpacing(12, after: artistRow)
+        stack.setCustomSpacing(8, after: artistRow)
         stack.setCustomSpacing(2, after: progress)
         stack.setCustomSpacing(10, after: timeRow)
         playerContainer.addSubview(stack)
@@ -621,8 +621,8 @@ final class MusicApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavig
         let button = IconButton(image: image, target: self, action: action)
         button.isBordered = false; button.toolTip = help; button.setAccessibilityLabel(help)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.widthAnchor.constraint(equalToConstant: max(28, size + 10)).isActive = true
-        button.heightAnchor.constraint(equalToConstant: max(28, size + 10)).isActive = true
+        button.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        button.heightAnchor.constraint(equalToConstant: 32).isActive = true
         return button
     }
 
